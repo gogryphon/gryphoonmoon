@@ -1,28 +1,11 @@
-Dash Core staging tree
+Gryphon Moon Core staging tree
 ===========================
 
 |CI|master|develop|
 |-|-|-|
-|Gitlab|[![Build Status](https://gitlab.com/dashpay/dash/badges/master/pipeline.svg)](https://gitlab.com/dashpay/dash/-/tree/master)|[![Build Status](https://gitlab.com/dashpay/dash/badges/develop/pipeline.svg)](https://gitlab.com/dashpay/dash/-/tree/develop)|
+|Gitlab|[![Build Status](https://github.com/gogryphon/gryphoonmoon/badges/master/pipeline.svg)](https://github.com/gogryphon/gryphoonmoon/-/tree/master)|[![Build Status](https://github.com/gogryphon/gryphoonmoon/badges/develop/pipeline.svg)](https://github.com/gogryphon/gryphoonmoon/-/tree/develop)|
 
-https://www.dash.org
-
-For an immediately usable, binary version of the Dash Core software, see
-https://www.dash.org/downloads/.
-
-Further information about Dash Core is available in [./doc/](/doc).
-
-What is Dash?
--------------
-
-Dash is an experimental digital currency that enables instant, private
-payments to anyone, anywhere in the world. Dash uses peer-to-peer technology
-to operate with no central authority: managing transactions and issuing money
-are carried out collectively by the network. Dash Core is the name of the open
-source software which enables the use of this currency.
-
-
-For more information read the original Dash whitepaper.
+https://www.gryphonmoonh.com
 
 License
 -------
