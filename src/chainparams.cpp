@@ -225,7 +225,7 @@ public:
         pchMessageStart[1] = 0x42;
         pchMessageStart[2] = 0x4c;
         pchMessageStart[3] = 0x43;
-        nDefaultPort = 9969;
+        nDefaultPort = 11820;
         nDefaultPlatformP2PPort = 26656;
         nDefaultPlatformHTTPPort = 443;
         nPruneAfterHeight = 100000;
@@ -395,7 +395,7 @@ public:
         pchMessageStart[1] = 0x4f; // O
         pchMessageStart[2] = 0x53; // S
         pchMessageStart[3] = 0x4d; // M
-        nDefaultPort = 19969;
+        nDefaultPort = 111820;
         nDefaultPlatformP2PPort = 22000;
         nDefaultPlatformHTTPPort = 22001;
         nPruneAfterHeight = 1000;

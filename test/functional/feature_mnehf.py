@@ -25,7 +25,7 @@ from test_framework.util import (
 
 class MnehfTest(GryphonmoonTestFramework):
     def set_test_params(self):
-        extra_args = [["-vbparams=testdummy:0:996999699969:12:12:12:5:1", "-persistmempool=0"] for _ in range(4)]
+        extra_args = [["-vbparams=testdummy:0:118201182011820:12:12:12:5:1", "-persistmempool=0"] for _ in range(4)]
         self.set_gryphonmoon_test_params(4, 3, fast_dip3_enforcement=True, extra_args=extra_args)
 
     def skip_test_if_missing_module(self):

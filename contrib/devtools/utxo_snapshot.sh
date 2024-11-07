@@ -24,7 +24,7 @@ fi
 GENERATE_AT_HEIGHT="${1}"; shift;
 OUTPUT_PATH="${1}"; shift;
 # Most of the calls we make take a while to run, so pad with a lengthy timeout.
-BITCOIN_CLI_CALL="${*} -rpcclienttimeout=9969999"
+BITCOIN_CLI_CALL="${*} -rpcclienttimeout=11820999"
 
 # Block we'll invalidate/reconsider to rewind/fast-forward the chain.
 PIVOT_BLOCKHASH=$($BITCOIN_CLI_CALL getblockhash $(( GENERATE_AT_HEIGHT + 1 )) )

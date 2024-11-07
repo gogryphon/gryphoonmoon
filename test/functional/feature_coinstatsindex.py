@@ -151,7 +151,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
             assert_equal(res5['block_info'], {
                 'unspendable': 0,
                 'prevout_spent': 500,
-                'new_outputs_ex_coinbase': Decimal('499.99699775'),
+                'new_outputs_ex_coinbase': Decimal('499.118209775'),
                 'coinbase': Decimal('500.00000225'),
                 'unspendables': {
                     'genesis_block': 0,
@@ -190,16 +190,16 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         for hash_option in index_hash_options:
             # Check all amounts were registered correctly
             res6 = index_node.gettxoutsetinfo(hash_option, 108)
-            assert_equal(res6['total_unspendable_amount'], Decimal('70.98996999'))
+            assert_equal(res6['total_unspendable_amount'], Decimal('70.981182099'))
             assert_equal(res6['block_info'], {
-                'unspendable': Decimal('20.98996999'),
+                'unspendable': Decimal('20.981182099'),
                 'prevout_spent': 511,
-                'new_outputs_ex_coinbase': Decimal('489.99699741'),
+                'new_outputs_ex_coinbase': Decimal('489.118209741'),
                 'coinbase': Decimal('500.01000260'),
                 'unspendables': {
                     'genesis_block': 0,
                     'bip30': 0,
-                    'scripts': Decimal('20.98996999'),
+                    'scripts': Decimal('20.981182099'),
                     'unclaimed_rewards': 0
                 }
             })
@@ -221,7 +221,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
 
         for hash_option in index_hash_options:
             res7 = index_node.gettxoutsetinfo(hash_option, 109)
-            assert_equal(res7['total_unspendable_amount'], Decimal('530.98996999'))
+            assert_equal(res7['total_unspendable_amount'], Decimal('530.981182099'))
             assert_equal(res7['block_info'], {
                 'unspendable': 460,
                 'prevout_spent': 0,

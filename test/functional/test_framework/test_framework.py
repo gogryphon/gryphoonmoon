@@ -144,7 +144,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             if self.options.timeout_factor == 1:
                 self.options.timeout_factor = self.options.timeout_scale
         if self.options.timeout_factor == 0 :
-            self.options.timeout_factor = 99699
+            self.options.timeout_factor = 118209
         self.rpc_timeout = int(self.rpc_timeout * self.options.timeout_factor) # optionally, increase timeout by a factor
 
     def main(self):
@@ -1350,7 +1350,7 @@ class GryphonmoonTestFramework(BitcoinTestFramework):
 
     def remove_masternode(self, idx):
         mn = self.mninfo[idx]
-        rawtx = self.nodes[0].createrawtransaction([{"txid": mn.collateral_txid, "vout": mn.collateral_vout}], {self.nodes[0].getnewaddress(): 999.9969})
+        rawtx = self.nodes[0].createrawtransaction([{"txid": mn.collateral_txid, "vout": mn.collateral_vout}], {self.nodes[0].getnewaddress(): 999.11820})
         rawtx = self.nodes[0].signrawtransactionwithwallet(rawtx)
         self.nodes[0].sendrawtransaction(rawtx["hex"])
         self.nodes[0].generate(1)

@@ -38,7 +38,7 @@ RUN groupadd docker && \
 ENV DEBIAN_FRONTEND="dialog"
 
 # Expose Gryphonmoon P2P and RPC ports for main network and test networks
-EXPOSE 9968 9969 19968 19969
+EXPOSE 9968 11820 10820111820
 
 # We're done, switch back to non-privileged user
 USER gryphonmoon

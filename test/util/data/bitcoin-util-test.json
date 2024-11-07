@@ -236,7 +236,7 @@
     "description": "Parses a transaction with no inputs and a single output script (output in json)"
   },
   { "exec": "./gryphonmoon-tx",
-    "args": ["-create", "outscript=0:9969996999"],
+    "args": ["-create", "outscript=0:118201182099"],
     "return_code": 1,
     "error_txt": "error: script parse error: decimal numeric value only allowed in the range -0xFFFFFFFF...0xFFFFFFFF",
     "description": "Try to parse an output script with a decimal number above the allowed range"
@@ -253,7 +253,7 @@
     "description": "Try to parse an output script with a decimal number at the upper limit of the allowed range"
   },
   { "exec": "./gryphonmoon-tx",
-    "args": ["-create", "outscript=0:-9969996999"],
+    "args": ["-create", "outscript=0:-118201182099"],
     "return_code": 1,
     "error_txt": "error: script parse error: decimal numeric value only allowed in the range -0xFFFFFFFF...0xFFFFFFFF",
     "description": "Try to parse an output script with a decimal number below the allowed range"

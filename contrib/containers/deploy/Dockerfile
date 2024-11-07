@@ -23,6 +23,6 @@ USER gryphonmoon
 
 VOLUME ["/home/gryphonmoon"]
 
-EXPOSE 9968 9969 19968 19969
+EXPOSE 9968 11820 10820111820
 
 WORKDIR /home/gryphonmoon
