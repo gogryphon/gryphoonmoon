@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2020 The Bitcoin Core developers
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,6 @@
 
 #include <base58.h>
 #include <chainparams.h>
-#include <fs.h>
 #include <interfaces/node.h>
 #include <key_io.h>
 #include <policy/policy.h>
@@ -24,7 +23,6 @@
 #include <script/script.h>
 #include <script/standard.h>
 #include <util/system.h>
-#include <util/time.h>
 
 #include <cmath>
 
@@ -52,16 +50,12 @@
 #include <QFontDatabase>
 #include <QFontMetrics>
 #include <QGuiApplication>
-#include <QJsonObject>
 #include <QKeyEvent>
-#include <QKeySequence>
-#include <QLatin1String>
 #include <QLineEdit>
 #include <QList>
 #include <QLocale>
 #include <QMenu>
 #include <QMouseEvent>
-#include <QPluginLoader>
 #include <QPointer>
 #include <QProgressDialog>
 #include <QScreen>
@@ -76,20 +70,12 @@
 #include <QVBoxLayout>
 #include <QtGlobal>
 
-#include <chrono>
-#include <exception>
-#include <fstream>
-#include <string>
-#include <vector>
-
 #if defined(Q_OS_MAC)
 
 #include <QProcess>
 
 void ForceActivation();
 #endif
-
-using namespace std::chrono_literals;
 
 namespace GUIUtil {
 
@@ -99,9 +85,9 @@ static const QString defaultStylesheetDirectory = ":css";
 // The actual stylesheet directory
 static QString stylesheetDirectory = defaultStylesheetDirectory;
 // The name of the traditional theme
-static const QString traditionalTheme = "Traditional";
+// static const QString traditionalTheme = "Traditional";
 // The theme to set by default if settings are missing or incorrect
-static const QString defaultTheme = "Light";
+// static const QString defaultTheme = "Light";
 // The prefix a theme name should have if we want to apply dark colors and styles to it
 static const QString darkThemePrefix = "Dark";
 // The theme to set as a base one for non-traditional themes
@@ -111,7 +97,7 @@ static const std::map<QString, QString> mapThemeToStyle{
     {generalTheme, "general.css"},
     {"Dark", "dark.css"},
     {"Light", "light.css"},
-    {"Traditional", "traditional.css"},
+    // {"Traditional", "traditional.css"},
 };
 
 /** loadFonts stores the SystemDefault font in osDefaultFont to be able to reference it later again */
@@ -150,11 +136,12 @@ static std::set<QWidget*> setRectsDisabled;
 
 static const std::map<ThemedColor, QColor> themedColors = {
     { ThemedColor::DEFAULT, QColor(85, 85, 85) },
+    { ThemedColor::PRIMARY, QColor(171, 132, 187) },
     { ThemedColor::UNCONFIRMED, QColor(128, 128, 128) },
-    { ThemedColor::BLUE, QColor(0, 141, 228) },
+    { ThemedColor::BLUE, QColor(106, 172, 251) },
     { ThemedColor::ORANGE, QColor(199, 147, 4) },
-    { ThemedColor::RED, QColor(168, 72, 50) },
-    { ThemedColor::GREEN, QColor(94, 140, 65) },
+    { ThemedColor::RED, QColor(220, 25, 25) },
+    { ThemedColor::GREEN, QColor(167, 197, 103) },
     { ThemedColor::BAREADDRESS, QColor(140, 140, 140) },
     { ThemedColor::TX_STATUS_OPENUNTILDATE, QColor(64, 64, 255) },
     { ThemedColor::BACKGROUND_WIDGET, QColor(234, 234, 236) },
@@ -167,18 +154,19 @@ static const std::map<ThemedColor, QColor> themedColors = {
 
 static const std::map<ThemedColor, QColor> themedDarkColors = {
     { ThemedColor::DEFAULT, QColor(199, 199, 199) },
-    { ThemedColor::UNCONFIRMED, QColor(170, 170, 170) },
-    { ThemedColor::BLUE, QColor(0, 89, 154) },
-    { ThemedColor::ORANGE, QColor(199, 147, 4) },
-    { ThemedColor::RED, QColor(168, 72, 50) },
-    { ThemedColor::GREEN, QColor(94, 140, 65) },
-    { ThemedColor::BAREADDRESS, QColor(140, 140, 140) },
+    { ThemedColor::PRIMARY, QColor(171, 132, 187) },
+    { ThemedColor::UNCONFIRMED, QColor(160, 165, 168) },
+    { ThemedColor::BLUE, QColor(106, 172, 251) },
+    { ThemedColor::ORANGE, QColor(231, 193, 59) },
+    { ThemedColor::RED, QColor(220, 25, 25) },
+    { ThemedColor::GREEN, QColor(167, 197, 103) },
+    { ThemedColor::BAREADDRESS, QColor(181, 186, 189) },
     { ThemedColor::TX_STATUS_OPENUNTILDATE, QColor(64, 64, 255) },
-    { ThemedColor::BACKGROUND_WIDGET, QColor(45, 45, 46) },
-    { ThemedColor::BORDER_WIDGET, QColor(74, 74, 75) },
-    { ThemedColor::BACKGROUND_NETSTATS, QColor(45, 45, 46, 230) },
-    { ThemedColor::BORDER_NETSTATS, QColor(74, 74, 75) },
-    { ThemedColor::QR_PIXEL, QColor(199, 199, 199) },
+    { ThemedColor::BACKGROUND_WIDGET, QColor(30, 30, 30) },
+    { ThemedColor::BORDER_WIDGET, QColor(30, 30, 30) },
+    { ThemedColor::BACKGROUND_NETSTATS, QColor(17, 19, 20) },
+    { ThemedColor::BORDER_NETSTATS, QColor(17, 19, 20) },
+    { ThemedColor::QR_PIXEL, QColor(171, 132, 187) },
     { ThemedColor::ICON_ALTERNATIVE_COLOR, QColor(74, 74, 75) },
 };
 
@@ -194,12 +182,15 @@ static const std::map<ThemedStyle, QString> themedStyles = {
 
 static const std::map<ThemedStyle, QString> themedDarkStyles = {
     { ThemedStyle::TS_INVALID, "background:#a84832;" },
-    { ThemedStyle::TS_ERROR, "color:#a84832;" },
+    // { ThemedStyle::TS_ERROR, "color:#a84832;" },
+    { ThemedStyle::TS_ERROR, "color:#dc1919;" },
     { ThemedStyle::TS_WARNING, "color:#999900;" },
     { ThemedStyle::TS_SUCCESS, "color:#5e8c41;" },
-    { ThemedStyle::TS_COMMAND, "color:#00599a;" },
-    { ThemedStyle::TS_PRIMARY, "color:#c7c7c7;" },
-    { ThemedStyle::TS_SECONDARY, "color:#aaa;" },
+    { ThemedStyle::TS_COMMAND, "color:#F49D2C;" },
+    // { ThemedStyle::TS_PRIMARY, "color:#c7c7c7;" },
+    { ThemedStyle::TS_PRIMARY, "color:#fff;" },
+    // { ThemedStyle::TS_SECONDARY, "color:#aaa;" },
+    { ThemedStyle::TS_SECONDARY, "color:#B5BABD;" },
 };
 
 QColor getThemedQColor(ThemedColor color)
@@ -263,15 +254,7 @@ QString dateTimeStr(const QDateTime &date)
 
 QString dateTimeStr(qint64 nTime)
 {
-    return dateTimeStr(QDateTime::fromSecsSinceEpoch((qint32)nTime));
-}
-
-QFont fixedPitchFont(bool use_embedded_font)
-{
-    if (use_embedded_font) {
-        return {"Roboto Mono"};
-    }
-    return QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    return dateTimeStr(QDateTime::fromTime_t((qint32)nTime));
 }
 
 // Just some dummy data to generate a convincing random-looking (but consistent) address
@@ -298,7 +281,7 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent, bool fAllow
 
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
-    widget->setPlaceholderText(QObject::tr("Enter a Dash address (e.g. %1)").arg(
+    widget->setPlaceholderText(QObject::tr("Enter a Gryphonmoon address (e.g. %1)").arg(
         QString::fromStdString(DummyAddress(Params()))));
     widget->setValidator(new BitcoinAddressEntryValidator(parent, fAllowURI));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
@@ -311,7 +294,7 @@ void setupAppearance(QWidget* parent, OptionsModel* model)
         QDialog dlg(parent);
         dlg.setObjectName("AppearanceSetup");
         dlg.setWindowTitle(QObject::tr("Appearance Setup"));
-        dlg.setWindowIcon(QIcon(":icons/dash"));
+        dlg.setWindowIcon(QIcon(":icons/gryphonmoon"));
         // And the widgets we add to it
         QLabel lblHeading(QObject::tr("Please choose your preferred settings for the appearance of %1").arg(PACKAGE_NAME), &dlg);
         lblHeading.setObjectName("lblHeading");
@@ -346,15 +329,10 @@ void setupAppearance(QWidget* parent, OptionsModel* model)
     }
 }
 
-void AddButtonShortcut(QAbstractButton* button, const QKeySequence& shortcut)
-{
-    QObject::connect(new QShortcut(shortcut, button), &QShortcut::activated, [button]() { button->animateClick(); });
-}
-
 bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
 {
-    // return if URI is not valid or is no dash: URI
-    if(!uri.isValid() || uri.scheme() != QString("dash"))
+    // return if URI is not valid or is no gryphonmoon: URI
+    if(!uri.isValid() || uri.scheme() != QString("gryphonmoon"))
         return false;
 
     SendCoinsRecipient rv;
@@ -396,7 +374,7 @@ bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
         {
             if(!i->second.isEmpty())
             {
-                if(!BitcoinUnits::parse(BitcoinUnits::DASH, i->second, &rv.amount))
+                if(!BitcoinUnits::parse(BitcoinUnits::GRYPHONMOON, i->second, &rv.amount))
                 {
                     return false;
                 }
@@ -428,12 +406,12 @@ bool validateBitcoinURI(const QString& uri)
 
 QString formatBitcoinURI(const SendCoinsRecipient &info)
 {
-    QString ret = QString("dash:%1").arg(info.address);
+    QString ret = QString("gryphonmoon:%1").arg(info.address);
     int paramCount = 0;
 
     if (info.amount)
     {
-        ret += QString("?amount=%1").arg(BitcoinUnits::format(BitcoinUnits::DASH, info.amount, false, BitcoinUnits::SeparatorStyle::NEVER));
+        ret += QString("?amount=%1").arg(BitcoinUnits::format(BitcoinUnits::GRYPHONMOON, info.amount, false, BitcoinUnits::SeparatorStyle::NEVER));
         paramCount++;
     }
 
@@ -504,15 +482,9 @@ bool hasEntryData(const QAbstractItemView *view, int column, int role)
     return !selection.at(0).data(role).toString().isEmpty();
 }
 
-void LoadFont(const QString& file_name)
-{
-    const int id = QFontDatabase::addApplicationFont(file_name);
-    assert(id != -1);
-}
-
 QString getDefaultDataDirectory()
 {
-    return PathToQString(GetDefaultDataDir());
+    return boostPathToQString(GetDefaultDataDir());
 }
 
 QString getSaveFileName(QWidget *parent, const QString &caption, const QString &dir,
@@ -640,28 +612,28 @@ void bringToFront(QWidget* w)
 
 void handleCloseWindowShortcut(QWidget* w)
 {
-    QObject::connect(new QShortcut(QKeySequence(QObject::tr("Ctrl+W")), w), &QShortcut::activated, w, &QWidget::close);
+    QObject::connect(new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_W), w), &QShortcut::activated, w, &QWidget::close);
 }
 
 void openDebugLogfile()
 {
-    fs::path pathDebug = gArgs.GetDataDirNet() / "debug.log";
+    fs::path pathDebug = GetDataDir() / "debug.log";
 
     /* Open debug.log with the associated application */
     if (fs::exists(pathDebug))
-        QDesktopServices::openUrl(QUrl::fromLocalFile(PathToQString(pathDebug)));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(boostPathToQString(pathDebug)));
 }
 
 void openConfigfile()
 {
     fs::path pathConfig = GetConfigFile(gArgs.GetArg("-conf", BITCOIN_CONF_FILENAME));
 
-    /* Open dash.conf with the associated application */
+    /* Open gryphonmoon.conf with the associated application */
     if (fs::exists(pathConfig)) {
         // Workaround for macOS-specific behavior; see #15409.
-        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(PathToQString(pathConfig)))) {
+        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(boostPathToQString(pathConfig)))) {
 #ifdef Q_OS_MAC
-            QProcess::startDetached("/usr/bin/open", QStringList{"-t", PathToQString(pathConfig)});
+            QProcess::startDetached("/usr/bin/open", QStringList{"-t", boostPathToQString(pathConfig)});
 #endif
             return;
         }
@@ -670,11 +642,11 @@ void openConfigfile()
 
 void showBackups()
 {
-    fs::path backupsDir = gArgs.GetBackupsDirPath();
+    fs::path backupsDir = GetBackupsDir();
 
     /* Open folder with default browser */
     if (fs::exists(backupsDir))
-        QDesktopServices::openUrl(QUrl::fromLocalFile(PathToQString(backupsDir)));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(boostPathToQString(backupsDir)));
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int _size_threshold, QObject *parent) :
@@ -732,15 +704,15 @@ fs::path static StartupShortcutPath()
 {
     std::string chain = gArgs.GetChainName();
     if (chain == CBaseChainParams::MAIN)
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Dash Core.lnk";
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "Gryphonmoon Core.lnk";
     if (chain == CBaseChainParams::TESTNET) // Remove this special case when CBaseChainParams::TESTNET = "testnet4"
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Dash Core (testnet).lnk";
-    return GetSpecialFolderPath(CSIDL_STARTUP) / strprintf("Dash Core (%s).lnk", chain);
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "Gryphonmoon Core (testnet).lnk";
+    return GetSpecialFolderPath(CSIDL_STARTUP) / strprintf("Gryphonmoon Core (%s).lnk", chain);
 }
 
 bool GetStartOnSystemStartup()
 {
-    // check for "Dash Core*.lnk"
+    // check for "Gryphonmoon Core*.lnk"
     return fs::exists(StartupShortcutPath());
 }
 
@@ -815,13 +787,13 @@ fs::path static GetAutostartFilePath()
 {
     std::string chain = gArgs.GetChainName();
     if (chain == CBaseChainParams::MAIN)
-        return GetAutostartDir() / "dashcore.desktop";
-    return GetAutostartDir() / strprintf("dashcore-%s.desktop", chain);
+        return GetAutostartDir() / "gryphonmooncore.desktop";
+    return GetAutostartDir() / strprintf("gryphonmooncore-%s.desktop", chain);
 }
 
 bool GetStartOnSystemStartup()
 {
-    std::ifstream optionFile{GetAutostartFilePath()};
+    fsbridge::ifstream optionFile(GetAutostartFilePath());
     if (!optionFile.good())
         return false;
     // Scan through file for "Hidden=true":
@@ -845,25 +817,24 @@ bool SetStartOnSystemStartup(bool fAutoStart)
     else
     {
         char pszExePath[MAX_PATH+1];
-        ssize_t r = readlink("/proc/self/exe", pszExePath, sizeof(pszExePath));
-        if (r == -1 || r > MAX_PATH) {
+        ssize_t r = readlink("/proc/self/exe", pszExePath, sizeof(pszExePath) - 1);
+        if (r == -1)
             return false;
-        }
         pszExePath[r] = '\0';
 
         fs::create_directories(GetAutostartDir());
 
-        std::ofstream optionFile{GetAutostartFilePath(), std::ios_base::out | std::ios_base::trunc};
+        fsbridge::ofstream optionFile(GetAutostartFilePath(), std::ios_base::out | std::ios_base::trunc);
         if (!optionFile.good())
             return false;
         std::string chain = gArgs.GetChainName();
-        // Write a dashcore.desktop file to the autostart directory:
+        // Write a gryphonmooncore.desktop file to the autostart directory:
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         if (chain == CBaseChainParams::MAIN)
-            optionFile << "Name=Dash Core\n";
+            optionFile << "Name=Gryphonmoon Core\n";
         else
-            optionFile << strprintf("Name=Dash Core (%s)\n", chain);
+            optionFile << strprintf("Name=Gryphonmoon Core (%s)\n", chain);
         optionFile << "Exec=" << pszExePath << strprintf(" -min -chain=%s\n", chain);
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
@@ -910,12 +881,14 @@ const std::vector<QString> listThemes()
 
 const QString getDefaultTheme()
 {
-    return defaultTheme;
+    return darkThemePrefix;
+    // return defaultTheme;
 }
 
 bool isValidTheme(const QString& strTheme)
 {
-    return strTheme == defaultTheme || strTheme == darkThemePrefix || strTheme == traditionalTheme;
+    // return strTheme == defaultTheme || strTheme == darkThemePrefix || strTheme == traditionalTheme;
+    return strTheme == darkThemePrefix;
 }
 
 void loadStyleSheet(bool fForceUpdate)
@@ -1002,7 +975,7 @@ void loadStyleSheet(bool fForceUpdate)
 
         std::vector<QString> vecFiles;
         // If light/dark theme is used load general styles first
-        if (dashThemeActive()) {
+        if (gryphonmoonThemeActive()) {
             vecFiles.push_back(pathToFile(generalTheme));
         }
         vecFiles.push_back(pathToFile(getActiveTheme()));
@@ -1583,18 +1556,22 @@ bool isSupportedWeight(const QFont::Weight weight)
 QString getActiveTheme()
 {
     QSettings settings;
-    QString theme = settings.value("theme", defaultTheme).toString();
+    // QString theme = settings.value("theme", defaultTheme).toString();
+    QString theme = settings.value("theme", darkThemePrefix).toString();
     if (!isValidTheme(theme)) {
-        return defaultTheme;
+        // return defaultTheme;
+        return darkThemePrefix;
     }
     return theme;
 }
 
-bool dashThemeActive()
+bool gryphonmoonThemeActive()
 {
     QSettings settings;
-    QString theme = settings.value("theme", defaultTheme).toString();
-    return theme != traditionalTheme;
+    // QString theme = settings.value("theme", defaultTheme).toString();
+    QString theme = settings.value("theme", darkThemePrefix).toString();
+    // return theme != traditionalTheme;
+    return true;
 }
 
 void loadTheme(bool fForce)
@@ -1609,7 +1586,7 @@ void disableMacFocusRect(const QWidget* w)
 #ifdef Q_OS_MAC
     for (const auto& c : w->findChildren<QWidget*>()) {
         if (c->testAttribute(Qt::WA_MacShowFocusRect)) {
-            c->setAttribute(Qt::WA_MacShowFocusRect, !dashThemeActive());
+            c->setAttribute(Qt::WA_MacShowFocusRect, !gryphonmoonThemeActive());
             setRectsDisabled.emplace(c);
         }
     }
@@ -1623,7 +1600,7 @@ void updateMacFocusRects()
     auto it = setRectsDisabled.begin();
     while (it != setRectsDisabled.end()) {
         if (allWidgets.contains(*it)) {
-            (*it)->setAttribute(Qt::WA_MacShowFocusRect, !dashThemeActive());
+            (*it)->setAttribute(Qt::WA_MacShowFocusRect, !gryphonmoonThemeActive());
             ++it;
         } else {
             it = setRectsDisabled.erase(it);
@@ -1638,14 +1615,14 @@ void updateButtonGroupShortcuts(QButtonGroup* buttonGroup)
         return;
     }
 #ifdef Q_OS_MAC
-    auto modifier = "Ctrl";
+    auto modifier = Qt::CTRL;
 #else
-    auto modifier = "Alt";
+    auto modifier = Qt::ALT;
 #endif
-    int nKey = 1;
+    int nKey = 0;
     for (auto button : buttonGroup->buttons()) {
         if (button->isVisible()) {
-            button->setShortcut(QKeySequence(QString("%1+%2").arg(modifier).arg(nKey++)));
+            button->setShortcut(QKeySequence(modifier + Qt::Key_1 + nKey++));
         } else {
             button->setShortcut(QKeySequence());
         }
@@ -1661,14 +1638,14 @@ void setClipboard(const QString& str)
     }
 }
 
-fs::path QStringToPath(const QString &path)
+fs::path qstringToBoostPath(const QString &path)
 {
-    return fs::u8path(path.toStdString());
+    return fs::path(path.toStdString());
 }
 
-QString PathToQString(const fs::path &path)
+QString boostPathToQString(const fs::path &path)
 {
-    return QString::fromStdString(path.u8string());
+    return QString::fromStdString(path.string());
 }
 
 QString NetworkToQString(Network net)
@@ -1686,59 +1663,24 @@ QString NetworkToQString(Network net)
     assert(false);
 }
 
-QString ConnectionTypeToQString(ConnectionType conn_type, bool prepend_direction)
+QString formatDurationStr(int secs)
 {
-    QString prefix;
-    if (prepend_direction) {
-        prefix = (conn_type == ConnectionType::INBOUND) ?
-                     /*: An inbound connection from a peer. An inbound connection
-                         is a connection initiated by a peer. */
-                     QObject::tr("Inbound") :
-                     /*: An outbound connection to a peer. An outbound connection
-                         is a connection initiated by us. */
-                     QObject::tr("Outbound") + " ";
-    }
-    switch (conn_type) {
-    case ConnectionType::INBOUND: return prefix;
-    //: Peer connection type that relays all network information.
-    case ConnectionType::OUTBOUND_FULL_RELAY: return prefix + QObject::tr("Full Relay");
-    /*: Peer connection type that relays network information about
-        blocks and not transactions or addresses. */
-    case ConnectionType::BLOCK_RELAY: return prefix + QObject::tr("Block Relay");
-    //: Peer connection type established manually through one of several methods.
-    case ConnectionType::MANUAL: return prefix + QObject::tr("Manual");
-    //: Short-lived peer connection type that tests the aliveness of known addresses.
-    case ConnectionType::FEELER: return prefix + QObject::tr("Feeler");
-    //: Short-lived peer connection type that solicits known addresses from a peer.
-    case ConnectionType::ADDR_FETCH: return prefix + QObject::tr("Address Fetch");
-    } // no default case, so the compiler can warn about missing cases
-    assert(false);
-}
+    QStringList strList;
+    int days = secs / 86400;
+    int hours = (secs % 86400) / 3600;
+    int mins = (secs % 3600) / 60;
+    int seconds = secs % 60;
 
-QString formatDurationStr(std::chrono::seconds dur)
-{
-    using days = std::chrono::duration<int, std::ratio<86400>>; // can remove this line after C++20
-    const auto d{std::chrono::duration_cast<days>(dur)};
-    const auto h{std::chrono::duration_cast<std::chrono::hours>(dur - d)};
-    const auto m{std::chrono::duration_cast<std::chrono::minutes>(dur - d - h)};
-    const auto s{std::chrono::duration_cast<std::chrono::seconds>(dur - d - h - m)};
-    QStringList str_list;
-    if (auto d2{d.count()}) str_list.append(QObject::tr("%1 d").arg(d2));
-    if (auto h2{h.count()}) str_list.append(QObject::tr("%1 h").arg(h2));
-    if (auto m2{m.count()}) str_list.append(QObject::tr("%1 m").arg(m2));
-    const auto s2{s.count()};
-    if (s2 || str_list.empty()) str_list.append(QObject::tr("%1 s").arg(s2));
-    return str_list.join(" ");
-}
+    if (days)
+        strList.append(QString(QObject::tr("%1 d")).arg(days));
+    if (hours)
+        strList.append(QString(QObject::tr("%1 h")).arg(hours));
+    if (mins)
+        strList.append(QString(QObject::tr("%1 m")).arg(mins));
+    if (seconds || (!days && !hours && !mins))
+        strList.append(QString(QObject::tr("%1 s")).arg(seconds));
 
-QString FormatPeerAge(std::chrono::seconds time_connected)
-{
-    const auto time_now{GetTime<std::chrono::seconds>()};
-    const auto age{time_now - time_connected};
-    if (age >= 24h) return QObject::tr("%1 d").arg(age / 24h);
-    if (age >= 1h) return QObject::tr("%1 h").arg(age / 1h);
-    if (age >= 1min) return QObject::tr("%1 m").arg(age / 1min);
-    return QObject::tr("%1 s").arg(age / 1s);
+    return strList.join(" ");
 }
 
 QString formatServicesStr(quint64 mask)
@@ -1755,16 +1697,14 @@ QString formatServicesStr(quint64 mask)
         return QObject::tr("None");
 }
 
-QString formatPingTime(std::chrono::microseconds ping_time)
+QString formatPingTime(int64_t ping_usec)
 {
-    return (ping_time == std::chrono::microseconds::max() || ping_time == 0us) ?
-        QObject::tr("N/A") :
-        QObject::tr("%1 ms").arg(QString::number((int)(count_microseconds(ping_time) / 1000), 10));
+    return (ping_usec == std::numeric_limits<int64_t>::max() || ping_usec == 0) ? QObject::tr("N/A") : QString(QObject::tr("%1 ms")).arg(QString::number((int)(ping_usec / 1000), 10));
 }
 
 QString formatTimeOffset(int64_t nTimeOffset)
 {
-  return QObject::tr("%1 s").arg(QString::number((int)nTimeOffset, 10));
+  return QString(QObject::tr("%1 s")).arg(QString::number((int)nTimeOffset, 10));
 }
 
 QString formatNiceTimeOffset(qint64 secs)
@@ -1806,14 +1746,14 @@ QString formatNiceTimeOffset(qint64 secs)
 
 QString formatBytes(uint64_t bytes)
 {
-    if (bytes < 1'000)
-        return QObject::tr("%1 B").arg(bytes);
-    if (bytes < 1'000'000)
-        return QObject::tr("%1 kB").arg(bytes / 1'000);
-    if (bytes < 1'000'000'000)
-        return QObject::tr("%1 MB").arg(bytes / 1'000'000);
+    if(bytes < 1024)
+        return QString(QObject::tr("%1 B")).arg(bytes);
+    if(bytes < 1024 * 1024)
+        return QString(QObject::tr("%1 KB")).arg(bytes / 1024);
+    if(bytes < 1024 * 1024 * 1024)
+        return QString(QObject::tr("%1 MB")).arg(bytes / 1024 / 1024);
 
-    return QObject::tr("%1 GB").arg(bytes / 1'000'000'000);
+    return QString(QObject::tr("%1 GB")).arg(bytes / 1024 / 1024 / 1024);
 }
 
 qreal calculateIdealFontSize(int width, const QString& text, QFont font, qreal minPointSize, qreal font_size) {
@@ -1874,22 +1814,12 @@ void LogQtInfo()
 #else
     const std::string qt_link{"dynamic"};
 #endif
-    // TODO replace instances of LogPrintf with LogInfo once 28318 is merged
-    LogPrintf("Qt %s (%s), plugin=%s\n", qVersion(), qt_link, QGuiApplication::platformName().toStdString());
-    const auto static_plugins = QPluginLoader::staticPlugins();
-    if (static_plugins.empty()) {
-        LogPrintf("No static plugins.\n");
-    } else {
-        LogPrintf("Static plugins:\n");
-        for (const QStaticPlugin& p : static_plugins) {
-            QJsonObject meta_data = p.metaData();
-            const std::string plugin_class = meta_data.take(QString("className")).toString().toStdString();
-            const int plugin_version = meta_data.take(QString("version")).toInt();
-            LogPrintf(" %s, version %d\n", plugin_class, plugin_version);
-        }
-    }
-
-    LogPrintf("Style: %s / %s\n", QApplication::style()->objectName().toStdString(), QApplication::style()->metaObject()->className());
+#ifdef QT_STATICPLUGIN
+    const std::string plugin_link{"static"};
+#else
+    const std::string plugin_link{"dynamic"};
+#endif
+    LogPrintf("Qt %s (%s), plugin=%s (%s)\n", qVersion(), qt_link, QGuiApplication::platformName().toStdString(), plugin_link);
     LogPrintf("System: %s, %s\n", QSysInfo::prettyProductName().toStdString(), QSysInfo::buildAbi().toStdString());
     for (const QScreen* s : QGuiApplication::screens()) {
         LogPrintf("Screen: %s %dx%d, pixel ratio=%.1f\n", s->name().toStdString(), s->size().width(), s->size().height(), s->devicePixelRatio());
@@ -1932,24 +1862,6 @@ QImage GetImage(const QLabel* label)
 #else
     return label->pixmap()->toImage();
 #endif
-}
-
-QString MakeHtmlLink(const QString& source, const QString& link)
-{
-    return QString(source).replace(
-        link,
-        QLatin1String("<a href=\"") + link + QLatin1String("\">") + link + QLatin1String("</a>"));
-}
-
-void PrintSlotException(
-    const std::exception* exception,
-    const QObject* sender,
-    const QObject* receiver)
-{
-    std::string description = sender->metaObject()->className();
-    description += "->";
-    description += receiver->metaObject()->className();
-    PrintExceptionContinue(std::make_exception_ptr(exception), description.c_str());
 }
 
 } // namespace GUIUtil

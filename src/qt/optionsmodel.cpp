@@ -26,7 +26,6 @@
 #endif
 
 #include <QDebug>
-#include <QLatin1Char>
 #include <QSettings>
 #include <QStringList>
 
@@ -61,15 +60,14 @@ void OptionsModel::Init(bool resetSettings)
     // These are Qt-only settings:
 
     // Window
-    if (!settings.contains("fHideTrayIcon")) {
+    if (!settings.contains("fHideTrayIcon"))
         settings.setValue("fHideTrayIcon", false);
-    }
-    m_show_tray_icon = !settings.value("fHideTrayIcon").toBool();
-    Q_EMIT showTrayIconChanged(m_show_tray_icon);
+    fHideTrayIcon = settings.value("fHideTrayIcon").toBool();
+    Q_EMIT hideTrayIconChanged(fHideTrayIcon);
 
     if (!settings.contains("fMinimizeToTray"))
         settings.setValue("fMinimizeToTray", false);
-    fMinimizeToTray = settings.value("fMinimizeToTray").toBool() && m_show_tray_icon;
+    fMinimizeToTray = settings.value("fMinimizeToTray").toBool() && !fHideTrayIcon;
 
     if (!settings.contains("fMinimizeOnClose"))
         settings.setValue("fMinimizeOnClose", false);
@@ -77,7 +75,7 @@ void OptionsModel::Init(bool resetSettings)
 
     // Display
     if (!settings.contains("nDisplayUnit"))
-        settings.setValue("nDisplayUnit", BitcoinUnits::DASH);
+        settings.setValue("nDisplayUnit", BitcoinUnits::GRYPHONMOON);
     nDisplayUnit = settings.value("nDisplayUnit").toInt();
 
     if (!settings.contains("strThirdPartyTxUrls"))
@@ -146,8 +144,12 @@ void OptionsModel::Init(bool resetSettings)
 
 #ifdef ENABLE_WALLET
     if (!settings.contains("fCoinControlFeatures"))
-        settings.setValue("fCoinControlFeatures", false);
-    fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
+        settings.setValue("fCoinControlFeatures", true);
+    fCoinControlFeatures = settings.value("fCoinControlFeatures", true).toBool();
+
+    // Governance
+    if (!settings.contains("fShowGovernanceTab"))
+        settings.setValue("fShowGovernanceTab", false);    
 
     if (!settings.contains("fKeepChangeAddress"))
         settings.setValue("fKeepChangeAddress", false);
@@ -158,7 +160,7 @@ void OptionsModel::Init(bool resetSettings)
 
     // CoinJoin
     if (!settings.contains("fCoinJoinEnabled")) {
-        settings.setValue("fCoinJoinEnabled", true);
+        settings.setValue("fCoinJoinEnabled", false);
     }
     if (!gArgs.SoftSetBoolArg("-enablecoinjoin", settings.value("fCoinJoinEnabled").toBool())) {
         addOverriddenOption("-enablecoinjoin");
@@ -190,6 +192,18 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("nPruneSize", DEFAULT_PRUNE_TARGET_GB);
     SetPruneEnabled(settings.value("bPrune").toBool());
 
+    // If GUI is setting prune, then we also must set disablegovernance and txindex
+    if (settings.value("bPrune").toBool()) {
+        if (gArgs.SoftSetBoolArg("-disablegovernance", true)) {
+            LogPrintf("%s: parameter interaction: -prune=true -> setting -disablegovernance=true\n", __func__);
+            addOverriddenOption("-disablegovernance");
+        }
+        if (gArgs.SoftSetBoolArg("-txindex", false)) {
+            LogPrintf("%s: parameter interaction: -prune=true -> setting -txindex=false\n", __func__);
+            addOverriddenOption("-txindex");
+        }
+    }
+
     if (!settings.contains("nDatabaseCache"))
         settings.setValue("nDatabaseCache", (qint64)nDefaultDbCache);
     if (!gArgs.SoftSetArg("-dbcache", settings.value("nDatabaseCache").toString().toStdString()))
@@ -210,24 +224,22 @@ void OptionsModel::Init(bool resetSettings)
     if (!gArgs.SoftSetBoolArg("-spendzeroconfchange", settings.value("bSpendZeroConfChange").toBool()))
         addOverriddenOption("-spendzeroconfchange");
 
-    if (!settings.contains("SubFeeFromAmount")) {
-        settings.setValue("SubFeeFromAmount", false);
-    }
-    m_sub_fee_from_amount = settings.value("SubFeeFromAmount", false).toBool();
-
     // CoinJoin
     if (!settings.contains("nCoinJoinSessions"))
         settings.setValue("nCoinJoinSessions", DEFAULT_COINJOIN_SESSIONS);
-    if (!gArgs.SoftSetArg("-coinjoinsessions", settings.value("nCoinJoinSessions").toString().toStdString()))
-        addOverriddenOption("-coinjoinsessions");
 
     if (!settings.contains("nCoinJoinRounds"))
         settings.setValue("nCoinJoinRounds", DEFAULT_COINJOIN_ROUNDS);
     if (!gArgs.SoftSetArg("-coinjoinrounds", settings.value("nCoinJoinRounds").toString().toStdString()))
         addOverriddenOption("-coinjoinrounds");
 
-    if (!settings.contains("nCoinJoinAmount"))
-        settings.setValue("nCoinJoinAmount", DEFAULT_COINJOIN_AMOUNT);
+    if (!settings.contains("nCoinJoinAmount")) {
+        // for migration from old settings
+        if (!settings.contains("nAnonymizeGryphonmoonAmount"))
+            settings.setValue("nCoinJoinAmount", DEFAULT_COINJOIN_AMOUNT);
+        else
+            settings.setValue("nCoinJoinAmount", settings.value("nAnonymizeGryphonmoonAmount").toInt());
+    }
     if (!gArgs.SoftSetArg("-coinjoinamount", settings.value("nCoinJoinAmount").toString().toStdString()))
         addOverriddenOption("-coinjoinamount");
 
@@ -238,13 +250,9 @@ void OptionsModel::Init(bool resetSettings)
 
     if (!settings.contains("nCoinJoinDenomsGoal"))
         settings.setValue("nCoinJoinDenomsGoal", DEFAULT_COINJOIN_DENOMS_GOAL);
-    if (!gArgs.SoftSetArg("-coinjoindenomsgoal", settings.value("nCoinJoinDenomsGoal").toString().toStdString()))
-        addOverriddenOption("-coinjoindenomsgoal");
 
     if (!settings.contains("nCoinJoinDenomsHardCap"))
         settings.setValue("nCoinJoinDenomsHardCap", DEFAULT_COINJOIN_DENOMS_HARDCAP);
-    if (!gArgs.SoftSetArg("-coinjoindenomshardcap", settings.value("nCoinJoinDenomsHardCap").toString().toStdString()))
-        addOverriddenOption("-coinjoindenomshardcap");
 #endif
 
     // Network
@@ -266,13 +274,6 @@ void OptionsModel::Init(bool resetSettings)
         addOverriddenOption("-listen");
     } else if (!settings.value("fListen").toBool()) {
         gArgs.SoftSetBoolArg("-listenonion", false);
-    }
-
-    if (!settings.contains("server")) {
-        settings.setValue("server", false);
-    }
-    if (!gArgs.SoftSetBoolArg("-server", settings.value("server").toBool())) {
-        addOverriddenOption("-server");
     }
 
     if (!settings.contains("fUseProxy"))
@@ -317,8 +318,8 @@ static void CopySettings(QSettings& dst, const QSettings& src)
 /** Back up a QSettings to an ini-formatted file. */
 static void BackupSettings(const fs::path& filename, const QSettings& src)
 {
-    qInfo() << "Backing up GUI settings to" << GUIUtil::PathToQString(filename);
-    QSettings dst(GUIUtil::PathToQString(filename), QSettings::IniFormat);
+    qInfo() << "Backing up GUI settings to" << GUIUtil::boostPathToQString(filename);
+    QSettings dst(GUIUtil::boostPathToQString(filename), QSettings::IniFormat);
     dst.clear();
     CopySettings(dst, src);
 }
@@ -328,7 +329,7 @@ void OptionsModel::Reset()
     QSettings settings;
 
     // Backup old settings to chain-specific datadir for troubleshooting
-    BackupSettings(gArgs.GetDataDirNet() / "guisettings.ini.bak", settings);
+    BackupSettings(GetDataDir(true) / "guisettings.ini.bak", settings);
 
     // Save the strDataDir setting
     QString dataDir = GUIUtil::getDefaultDataDirectory();
@@ -377,7 +378,7 @@ static ProxySetting GetProxySetting(QSettings &settings, const QString &name)
 
 static void SetProxySetting(QSettings &settings, const QString &name, const ProxySetting &ip_port)
 {
-    settings.setValue(name, QString{ip_port.ip + QLatin1Char(':') + ip_port.port});
+    settings.setValue(name, ip_port.ip + ":" + ip_port.port);
 }
 
 static const QString GetDefaultProxyAddress()
@@ -393,18 +394,10 @@ void OptionsModel::SetPruneEnabled(bool prune, bool force)
     std::string prune_val = prune ? ToString(prune_target_mib) : "0";
     if (force) {
         gArgs.ForceSetArg("-prune", prune_val);
-        if (prune) {
-            gArgs.ForceSetArg("-disablegovernance", "1");
-            gArgs.ForceSetArg("-txindex", "0");
-        }
         return;
     }
     if (!gArgs.SoftSetArg("-prune", prune_val)) {
         addOverriddenOption("-prune");
-    }
-    if (gArgs.GetArg("-prune", 0) > 0) {
-        gArgs.SoftSetBoolArg("-disablegovernance", true);
-        gArgs.SoftSetBoolArg("-txindex", false);
     }
 }
 
@@ -428,8 +421,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         {
         case StartAtStartup:
             return GUIUtil::GetStartOnSystemStartup();
-        case ShowTrayIcon:
-            return m_show_tray_icon;
+        case HideTrayIcon:
+            return fHideTrayIcon;
         case MinimizeToTray:
             return fMinimizeToTray;
         case MapPortUPnP:
@@ -466,8 +459,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
 #ifdef ENABLE_WALLET
         case SpendZeroConfChange:
             return settings.value("bSpendZeroConfChange");
-        case SubFeeFromAmount:
-            return m_sub_fee_from_amount;
         case ShowMasternodesTab:
             return settings.value("fShowMasternodesTab");
         case ShowGovernanceTab:
@@ -539,8 +530,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("nThreadsScriptVerif");
         case Listen:
             return settings.value("fListen");
-        case Server:
-            return settings.value("server");
         default:
             return QVariant();
         }
@@ -560,10 +549,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case StartAtStartup:
             successful = GUIUtil::SetStartOnSystemStartup(value.toBool());
             break;
-        case ShowTrayIcon:
-            m_show_tray_icon = value.toBool();
-            settings.setValue("fHideTrayIcon", !m_show_tray_icon);
-            Q_EMIT showTrayIconChanged(m_show_tray_icon);
+        case HideTrayIcon:
+            fHideTrayIcon = value.toBool();
+            settings.setValue("fHideTrayIcon", fHideTrayIcon);
+    		Q_EMIT hideTrayIconChanged(fHideTrayIcon);
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
@@ -644,10 +633,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 settings.setValue("fShowMasternodesTab", value);
                 setRestartRequired(true);
             }
-            break;
-        case SubFeeFromAmount:
-            m_sub_fee_from_amount = value.toBool();
-            settings.setValue("SubFeeFromAmount", m_sub_fee_from_amount);
             break;
         case ShowGovernanceTab:
             if (settings.value("fShowGovernanceTab") != value) {
@@ -808,12 +793,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case Listen:
             if (settings.value("fListen") != value) {
                 settings.setValue("fListen", value);
-                setRestartRequired(true);
-            }
-            break;
-        case Server:
-            if (settings.value("server") != value) {
-                settings.setValue("server", value);
                 setRestartRequired(true);
             }
             break;

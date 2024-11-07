@@ -10,7 +10,9 @@ import random
 from test_framework.address import ADDRESS_BCRT1_P2SH_OP_TRUE
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.messages import (
-    tx_from_hex,
+    CTransaction,
+    FromHex,
+    ToHex,
 )
 from test_framework.script import (
     CScript,
@@ -18,11 +20,6 @@ from test_framework.script import (
 )
 from test_framework.util import (
     assert_equal,
-)
-from test_framework.wallet import (
-    create_child_with_parents,
-    create_raw_chain,
-    make_chain,
 )
 
 class RPCPackagesTest(BitcoinTestFramework):
@@ -48,7 +45,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         self.address = node.get_deterministic_priv_key().address
         self.coins = []
         # The last 100 coinbase transactions are premature
-        for b in self.generatetoaddress(node, 200, self.address)[:100]:
+        for b in node.generatetoaddress(200, self.address)[:100]:
             coinbase = node.getblock(blockhash=b, verbosity=2)["tx"][0]
             self.coins.append({
                 "txid": coinbase["txid"],
@@ -79,6 +76,27 @@ class RPCPackagesTest(BitcoinTestFramework):
         self.test_multiple_parents()
         self.test_conflicting()
 
+    def chain_transaction(self, parent_txid, parent_value, n=0, parent_locking_script=None):
+        """Build a transaction that spends parent_txid.vout[n] and produces one output with
+        amount = parent_value with a fee deducted.
+        Return tuple (CTransaction object, raw hex, nValue, scriptPubKey of the output created).
+        """
+        node = self.nodes[0]
+        inputs = [{"txid": parent_txid, "vout": n}]
+        my_value = parent_value - Decimal("0.0001")
+        outputs = {self.address : my_value}
+        rawtx = node.createrawtransaction(inputs, outputs)
+        prevtxs = [{
+            "txid": parent_txid,
+            "vout": n,
+            "scriptPubKey": parent_locking_script,
+            "amount": parent_value,
+        }] if parent_locking_script else None
+        signedtx = node.signrawtransactionwithkey(hexstring=rawtx, privkeys=self.privkeys, prevtxs=prevtxs)
+        tx = FromHex(CTransaction(), signedtx["hex"])
+        tx.rehash()
+        assert signedtx["complete"]
+        return (tx, signedtx["hex"], my_value, tx.vout[0].scriptPubKey.hex())
 
     def test_independent(self):
         self.log.info("Test multiple independent transactions in a package")
@@ -88,7 +106,7 @@ class RPCPackagesTest(BitcoinTestFramework):
 
         self.log.info("Test an otherwise valid package with an extra garbage tx appended")
         garbage_tx = node.createrawtransaction([{"txid": "00" * 32, "vout": 5}], {self.address: 1})
-        tx = tx_from_hex(garbage_tx)
+        tx = FromHex(CTransaction(), garbage_tx)
         # Only the txid is returned because validation is incomplete for the independent txns.
         # Package validation is atomic: if the node cannot find a UTXO for any single tx in the package,
         # it terminates immediately to avoid unnecessary, expensive signature verification.
@@ -100,8 +118,8 @@ class RPCPackagesTest(BitcoinTestFramework):
         coin = self.coins.pop()
         tx_bad_sig_hex = node.createrawtransaction([{"txid": coin["txid"], "vout": 0}],
                                            {self.address : coin["amount"] - Decimal("0.0001")})
-        tx_bad_sig = tx_from_hex(tx_bad_sig_hex)
-        tx_bad_sig_hex = tx_bad_sig.serialize().hex()
+        tx_bad_sig = FromHex(CTransaction(), tx_bad_sig_hex)
+        tx_bad_sig_hex = ToHex(tx_bad_sig)
         testres_bad_sig = node.testmempoolaccept(self.independent_txns_hex + [tx_bad_sig_hex])
         # By the time the signature for the last transaction is checked, all the other transactions
         # have been fully validated, which is why the node returns full validation results for all
@@ -118,7 +136,7 @@ class RPCPackagesTest(BitcoinTestFramework):
                                            {self.address : coin["amount"] - Decimal("0.999")})
         tx_high_fee_signed = node.signrawtransactionwithkey(hexstring=tx_high_fee_raw, privkeys=self.privkeys)
         assert tx_high_fee_signed["complete"]
-        tx_high_fee = tx_from_hex(tx_high_fee_signed["hex"])
+        tx_high_fee = FromHex(CTransaction(), tx_high_fee_signed["hex"])
         testres_high_fee = node.testmempoolaccept([tx_high_fee_signed["hex"]])
         assert_equal(testres_high_fee, [
             {"txid": tx_high_fee.rehash(), "allowed": False, "reject-reason": "max-fee-exceeded"}
@@ -130,7 +148,20 @@ class RPCPackagesTest(BitcoinTestFramework):
     def test_chain(self):
         node = self.nodes[0]
         first_coin = self.coins.pop()
-        (chain_hex, chain_txns) = create_raw_chain(node, first_coin, self.address, self.privkeys)
+
+        # Chain of 25 transactions
+        parent_locking_script = None
+        txid = first_coin["txid"]
+        chain_hex = []
+        chain_txns = []
+        value = first_coin["amount"]
+
+        for _ in range(25):
+            (tx, txhex, value, parent_locking_script) = self.chain_transaction(txid, value, 0, parent_locking_script)
+            txid = tx.rehash()
+            chain_hex.append(txhex)
+            chain_txns.append(tx)
+
         self.log.info("Check that testmempoolaccept requires packages to be sorted by dependency")
         assert_equal(node.testmempoolaccept(rawtxs=chain_hex[::-1]),
                 [{"txid": tx.rehash(), "package-error": "package-not-sorted"} for tx in chain_txns[::-1]])
@@ -148,7 +179,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         assert_equal(testres_single, testres_multiple)
 
         # Clean up by clearing the mempool
-        self.generate(node, 1)
+        node.generate(1)
 
     def test_multiple_children(self):
         node = self.nodes[0]
@@ -161,7 +192,7 @@ class RPCPackagesTest(BitcoinTestFramework):
         rawtx = node.createrawtransaction(inputs, outputs)
 
         parent_signed = node.signrawtransactionwithkey(hexstring=rawtx, privkeys=self.privkeys)
-        parent_tx = tx_from_hex(parent_signed["hex"])
+        parent_tx = FromHex(CTransaction(), parent_signed["hex"])
         assert parent_signed["complete"]
         parent_txid = parent_tx.rehash()
         assert node.testmempoolaccept([parent_signed["hex"]])[0]["allowed"]
@@ -170,14 +201,14 @@ class RPCPackagesTest(BitcoinTestFramework):
         child_value = value - Decimal("0.0001")
 
         # Child A
-        (_, tx_child_a_hex, _, _) = make_chain(node, self.address, self.privkeys, parent_txid, child_value, 0, parent_locking_script_a)
+        (_, tx_child_a_hex, _, _) = self.chain_transaction(parent_txid, child_value, 0, parent_locking_script_a)
         assert not node.testmempoolaccept([tx_child_a_hex])[0]["allowed"]
 
         # Child B
         rawtx_b = node.createrawtransaction([{"txid": parent_txid, "vout": 1}], {self.address : child_value})
-        tx_child_b = tx_from_hex(rawtx_b)
+        tx_child_b = FromHex(CTransaction(), rawtx_b)
         tx_child_b.vin[0].scriptSig = CScript([CScript([OP_TRUE])])
-        tx_child_b_hex = tx_child_b.serialize().hex()
+        tx_child_b_hex = ToHex(tx_child_b)
         assert not node.testmempoolaccept([tx_child_b_hex])[0]["allowed"]
 
         self.log.info("Testmempoolaccept with entire package, should work with children in either order")
@@ -194,6 +225,19 @@ class RPCPackagesTest(BitcoinTestFramework):
             node.sendrawtransaction(rawtx)
         assert_equal(testres_single, testres_multiple_ab)
 
+    def create_child_with_parents(self, parents_tx, values, locking_scripts):
+        """Creates a transaction that spends the first output of each parent in parents_tx."""
+        num_parents = len(parents_tx)
+        total_value = sum(values)
+        inputs = [{"txid": tx.rehash(), "vout": 0} for tx in parents_tx]
+        outputs = {self.address : total_value - num_parents * Decimal("0.0001")}
+        rawtx_child = self.nodes[0].createrawtransaction(inputs, outputs)
+        prevtxs = []
+        for i in range(num_parents):
+            prevtxs.append({"txid": parents_tx[i].rehash(), "vout": 0, "scriptPubKey": locking_scripts[i], "amount": values[i]})
+        signedtx_child = self.nodes[0].signrawtransactionwithkey(hexstring=rawtx_child, privkeys=self.privkeys, prevtxs=prevtxs)
+        assert signedtx_child["complete"]
+        return signedtx_child["hex"]
 
     def test_multiple_parents(self):
         node = self.nodes[0]
@@ -208,12 +252,12 @@ class RPCPackagesTest(BitcoinTestFramework):
             for _ in range(num_parents):
                 parent_coin = self.coins.pop()
                 value = parent_coin["amount"]
-                (tx, txhex, value, parent_locking_script) = make_chain(node, self.address, self.privkeys, parent_coin["txid"], value)
+                (tx, txhex, value, parent_locking_script) = self.chain_transaction(parent_coin["txid"], value)
                 package_hex.append(txhex)
                 parents_tx.append(tx)
                 values.append(value)
                 parent_locking_scripts.append(parent_locking_script)
-            child_hex = create_child_with_parents(node, self.address, self.privkeys, parents_tx, values, parent_locking_scripts)
+            child_hex = self.create_child_with_parents(parents_tx, values, parent_locking_scripts)
             # Package accept should work with the parents in any order (as long as parents come before child)
             for _ in range(10):
                 random.shuffle(package_hex)
@@ -240,8 +284,8 @@ class RPCPackagesTest(BitcoinTestFramework):
         rawtx2 = node.createrawtransaction(inputs, output2)
         signedtx1 = node.signrawtransactionwithkey(hexstring=rawtx1, privkeys=self.privkeys)
         signedtx2 = node.signrawtransactionwithkey(hexstring=rawtx2, privkeys=self.privkeys)
-        tx1 = tx_from_hex(signedtx1["hex"])
-        tx2 = tx_from_hex(signedtx2["hex"])
+        tx1 = FromHex(CTransaction(), signedtx1["hex"])
+        tx2 = FromHex(CTransaction(), signedtx2["hex"])
         assert signedtx1["complete"]
         assert signedtx2["complete"]
 

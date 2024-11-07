@@ -1,6 +1,6 @@
-# Bootstrappable Dash Core Builds
+# Bootstrappable Gryphonmoon Core Builds
 
-This directory contains the files necessary to perform bootstrappable Dash
+This directory contains the files necessary to perform bootstrappable Gryphonmoon
 Core builds.
 
 [Bootstrappability][b17e] furthers our binary security guarantees by allowing us
@@ -11,7 +11,7 @@ We achieve bootstrappability by using Guix as a functional package manager.
 
 # Requirements
 
-Conservatively, you will need:
+Conservatively, you will need an x86_64 machine with:
 
 - 16GB of free disk space on the partition that /gnu/store will reside in
 - 8GB of free disk space **per platform triple** you're planning on building
@@ -57,7 +57,7 @@ and examples](#common-guix-build-invocation-patterns-and-examples) section below
 before starting a build. For a full list of customization options, see the
 [recognized environment variables][env-vars-list] section.*
 
-To build Dash Core reproducibly with all default options, invoke the
+To build Gryphonmoon Core reproducibly with all default options, invoke the
 following from the top of a clean repository:
 
 ```sh
@@ -80,14 +80,14 @@ crucial differences:
     * _**DETACHED_SIGS_REPO**_
 
       Set the directory where detached codesignatures can be found for the current
-      Dash Core version being built.
+      Gryphonmoon Core version being built.
 
       _REQUIRED environment variable_
 
 An invocation with all default options would look like:
 
 ```
-env DETACHED_SIGS_REPO=<path/to/dash-detached-sigs> ./contrib/guix/guix-codesign
+env DETACHED_SIGS_REPO=<path/to/gryphonmoon-detached-sigs> ./contrib/guix/guix-codesign
 ```
 
 ## Cleaning intermediate work directories
@@ -259,7 +259,7 @@ details.
   Override the number of jobs to run simultaneously, you might want to do so on
   a memory-limited machine. This may be passed to:
 
-  - `guix` build commands as in `guix shell --cores="$JOBS"`
+  - `guix` build commands as in `guix environment --cores="$JOBS"`
   - `make` as in `make --jobs="$JOBS"`
   - `xargs` as in `xargs -P"$JOBS"`
 
@@ -301,7 +301,7 @@ details.
 
 * _**ADDITIONAL_GUIX_ENVIRONMENT_FLAGS**_
 
-  Additional flags to be passed to the invocation of `guix shell` inside
+  Additional flags to be passed to the invocation of `guix environment` inside
   `guix time-machine`.
 
 # Choosing your security model
@@ -430,6 +430,6 @@ used.
 If you start `guix-daemon` using an init script, you can edit said script to
 supply this flag.
 
-[b17e]: https://bootstrappable.org/
+[b17e]: http://bootstrappable.org/
 [r12e/source-date-epoch]: https://reproducible-builds.org/docs/source-date-epoch/
 [env-vars-list]: #recognized-environment-variables

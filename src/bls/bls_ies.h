@@ -1,9 +1,9 @@
-// Copyright (c) 2018-2024 The Dash Core developers
+// Copyright (c) 2018-2021 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef DASH_CRYPTO_BLS_IES_H
-#define DASH_CRYPTO_BLS_IES_H
+#ifndef GRYPHONMOON_CRYPTO_BLS_IES_H
+#define GRYPHONMOON_CRYPTO_BLS_IES_H
 
 #include <bls/bls.h>
 #include <streams.h>
@@ -148,4 +148,4 @@ public:
     }
 };
 
-#endif // DASH_CRYPTO_BLS_IES_H
+#endif // GRYPHONMOON_CRYPTO_BLS_IES_H

@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2019 The Bitcoin Core developers
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2022 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,8 +26,6 @@
 #include <stdint.h>
 #include <string>
 
-#include <QLatin1String>
-
 QString TransactionDesc::FormatTxStatus(const interfaces::WalletTx& wtx, const interfaces::WalletTxStatus& status, bool inMempool, int numBlocks)
 {
     if (!status.is_final)
@@ -46,20 +44,19 @@ QString TransactionDesc::FormatTxStatus(const interfaces::WalletTx& wtx, const i
         bool fChainLocked = status.is_chainlocked;
 
         if (nDepth == 0) {
-            const QString abandoned{status.is_abandoned ? QLatin1String(", ") + tr("abandoned") : QString()};
-            strTxStatus = tr("0/unconfirmed, %1").arg((inMempool ? tr("in memory pool") : tr("not in memory pool"))) + abandoned;
+            strTxStatus = tr("0/unconfirmed, %1").arg((inMempool ? tr("in memory pool") : tr("not in memory pool"))) + (status.is_abandoned ? ", "+tr("abandoned") : "");
         } else if (!fChainLocked && nDepth < 6) {
             strTxStatus = tr("%1/unconfirmed").arg(nDepth);
         } else {
             strTxStatus = tr("%1 confirmations").arg(nDepth);
             if (fChainLocked) {
-                strTxStatus += QLatin1String(", ") + tr("locked via ChainLocks");
+                strTxStatus += ", " + tr("locked via ChainLocks");
                 return strTxStatus;
             }
         }
 
         if (status.is_islocked) {
-            strTxStatus += QLatin1String(", ") + tr("verified via InstantSend");
+            strTxStatus += ", " + tr("verified via InstantSend");
         }
 
         return strTxStatus;
@@ -95,10 +92,6 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     if (wtx.is_coinbase)
     {
         strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
-    }
-    else if (wtx.is_platform_transfer)
-    {
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Platform Transfer") + "<br>";
     }
     else if (wtx.value_map.count("from") && !wtx.value_map["from"].empty())
     {
@@ -274,7 +267,7 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     strHTML += "<b>" + tr("Output index") + ":</b> " + QString::number(rec->getOutputIndex()) + "<br>";
     strHTML += "<b>" + tr("Transaction total size") + ":</b> " + QString::number(wtx.tx->GetTotalSize()) + " bytes<br>";
 
-    // Message from normal dash:URI (dash:XyZ...?message=example)
+    // Message from normal gryphonmoon:URI (gryphonmoon:XyZ...?message=example)
     for (const std::pair<std::string, std::string>& r : orderForm) {
         if (r.first == "Message")
             strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";

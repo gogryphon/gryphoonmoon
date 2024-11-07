@@ -2,7 +2,7 @@ OpenBSD build guide
 ======================
 (updated for OpenBSD 6.7)
 
-This guide describes how to build dashd, dash-qt, and command-line utilities on OpenBSD.
+This guide describes how to build gryphonmoond, gryphonmoon-qt, and command-line utilities on OpenBSD.
 
 Preparation
 -------------
@@ -14,12 +14,11 @@ pkg_add git gmake libevent libtool
 pkg_add qt5 # (optional for enabling the GUI)
 pkg_add autoconf # (select highest version, e.g. 2.69)
 pkg_add automake # (select highest version, e.g. 1.15)
-pkg_add python # (select highest version, e.g. 3.9)
+pkg_add python # (select highest version, e.g. 3.8)
 pkg_add gmp
-pkg_add bash
 pkg_add boost
 
-git clone https://github.com/dashpay/dash.git
+git clone https://github.com/gogryphon/gryphonmoon.git
 ```
 
 See [dependencies.md](dependencies.md) for a complete overview.
@@ -50,7 +49,7 @@ from the root of the repository. Then set `BDB_PREFIX` for the next section:
 export BDB_PREFIX="$PWD/db4"
 ```
 
-### Building Dash Core
+### Building Gryphonmoon Core
 
 **Important**: Use `gmake` (the non-GNU `make` will exit with an error).
 
@@ -85,7 +84,7 @@ To configure with GUI:
 
 Build and run the tests:
 ```bash
-gmake # use "-j N" here for N parallel jobs
+gmake # use -jX here for parallelism
 gmake check
 ```
 

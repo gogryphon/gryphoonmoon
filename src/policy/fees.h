@@ -5,7 +5,7 @@
 #ifndef BITCOIN_POLICY_FEES_H
 #define BITCOIN_POLICY_FEES_H
 
-#include <consensus/amount.h>
+#include <amount.h>
 #include <policy/feerate.h>
 #include <uint256.h>
 #include <random.h>

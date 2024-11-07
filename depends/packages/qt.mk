@@ -1,9 +1,9 @@
 package=qt
-$(package)_version=5.15.11
+$(package)_version=5.15.10
 $(package)_download_path=https://download.qt.io/official_releases/qt/5.15/$($(package)_version)/submodules
 $(package)_suffix=everywhere-opensource-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=425ad301acd91ca66c10c0dabee0704e2d0cd2801a6b670115800cbb95f84846
+$(package)_sha256_hash=c0d06cb18d20f10bf7ad53552099e097ec39362d30a5d6f104724f55fa1c8fb9
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
 $(package)_qt_libs=corelib network widgets gui plugins testlib
 $(package)_linguist_tools = lrelease lupdate lconvert
@@ -23,20 +23,17 @@ $(package)_patches += guix_cross_lib_path.patch
 $(package)_patches += fast_fixed_dtoa_no_optimize.patch
 $(package)_patches += fix-macos-linker.patch
 $(package)_patches += memory_resource.patch
-$(package)_patches += windows_lto.patch
-$(package)_patches += fix-minimum-macos.patch
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=a31785948c640b7c66d9fe2db4993728ca07f64e41c560b3625ad191b276ff20
+$(package)_qttranslations_sha256_hash=38b942bc7e62794dd072945c8a92bb9dfffed24070aea300327a3bb42f855609
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=7cd847ae6ff09416df617136eadcaf0eb98e3bc9b89979219a3ea8111fb8d339
+$(package)_qttools_sha256_hash=66f46c9729c831dce431778a9c561cca32daceaede1c7e58568d7a5898167dae
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
 
 define $(package)_set_vars
-$(package)_config_env = QT_MAC_SDK_NO_VERSION_CHECK=1
 $(package)_config_opts_release = -release
 $(package)_config_opts_release += -silent
 $(package)_config_opts_debug = -debug
@@ -135,6 +132,9 @@ $(package)_config_opts_darwin += -no-feature-corewlan
 $(package)_config_opts_darwin += -no-freetype
 $(package)_config_opts_darwin += QMAKE_MACOSX_DEPLOYMENT_TARGET=$(OSX_MIN_VERSION)
 
+# Optimizing using > -O1 causes non-determinism when building across arches.
+$(package)_config_opts_aarch64_darwin += "QMAKE_CFLAGS_OPTIMIZE_FULL = -O1"
+
 ifneq ($(build_os),darwin)
 $(package)_config_opts_darwin += -xplatform macx-clang-linux
 $(package)_config_opts_darwin += -device-option MAC_SDK_PATH=$(OSX_SDK)
@@ -180,14 +180,10 @@ $(package)_config_opts_mingw32 += -xplatform win32-g++
 $(package)_config_opts_mingw32 += "QMAKE_CFLAGS = '$($(package)_cflags) $($(package)_cppflags)'"
 $(package)_config_opts_mingw32 += "QMAKE_CXX = '$($(package)_cxx)'"
 $(package)_config_opts_mingw32 += "QMAKE_CXXFLAGS = '$($(package)_cxxflags) $($(package)_cppflags)'"
-$(package)_config_opts_mingw32 += "QMAKE_LINK = '$($(package)_cxx)'"
 $(package)_config_opts_mingw32 += "QMAKE_LFLAGS = '$($(package)_ldflags)'"
 $(package)_config_opts_mingw32 += "QMAKE_LIB = '$($(package)_ar) rc'"
 $(package)_config_opts_mingw32 += -device-option CROSS_COMPILE="$(host)-"
 $(package)_config_opts_mingw32 += -pch
-ifneq ($(LTO),)
-$(package)_config_opts_mingw32 += -ltcg
-endif
 
 $(package)_config_opts_android = -xplatform android-clang
 $(package)_config_opts_android += -android-sdk $(ANDROID_SDK)
@@ -251,7 +247,6 @@ endef
 define $(package)_preprocess_cmds
   cp $($(package)_patch_dir)/qt.pro qt.pro && \
   cp $($(package)_patch_dir)/qttools_src.pro qttools/src/src.pro && \
-  patch -p1 -i $($(package)_patch_dir)/fix-minimum-macos.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix-macos-linker.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch && \
@@ -265,7 +260,6 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
   patch -p1 -i $($(package)_patch_dir)/fast_fixed_dtoa_no_optimize.patch && \
   patch -p1 -i $($(package)_patch_dir)/guix_cross_lib_path.patch && \
-  patch -p1 -i $($(package)_patch_dir)/windows_lto.patch && \
   mkdir -p qtbase/mkspecs/macx-clang-linux &&\
   cp -f qtbase/mkspecs/macx-clang/qplatformdefs.h qtbase/mkspecs/macx-clang-linux/ &&\
   cp -f $($(package)_patch_dir)/mac-qmake.conf qtbase/mkspecs/macx-clang-linux/qmake.conf && \
@@ -279,6 +273,9 @@ define $(package)_preprocess_cmds
 endef
 
 define $(package)_config_cmds
+  export PKG_CONFIG_SYSROOT_DIR=/ && \
+  export PKG_CONFIG_LIBDIR=$(host_prefix)/lib/pkgconfig && \
+  export QT_MAC_SDK_NO_VERSION_CHECK=1 && \
   cd qtbase && \
   ./configure -top-level $($(package)_config_opts)
 endef

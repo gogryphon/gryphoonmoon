@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 The Dash Core developers
+// Copyright (c) 2019-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,6 +24,7 @@
 #include <unordered_set>
 
 class CChainState;
+class CConnman;
 class CBlockIndex;
 class CMasternodeSync;
 class CScheduler;
@@ -34,7 +35,6 @@ namespace llmq
 {
 class CSigningManager;
 class CSigSharesManager;
-enum class VerifyRecSigStatus;
 
 class CChainLocksHandler : public CRecoveredSigsListener
 {
@@ -46,14 +46,14 @@ class CChainLocksHandler : public CRecoveredSigsListener
 
 private:
     CChainState& m_chainstate;
+    CConnman& connman;
+    CMasternodeSync& m_mn_sync;
     CQuorumManager& qman;
     CSigningManager& sigman;
     CSigSharesManager& shareman;
     CSporkManager& spork_manager;
     CTxMemPool& mempool;
-    const CMasternodeSync& m_mn_sync;
 
-    const bool m_is_masternode;
     std::unique_ptr<CScheduler> scheduler;
     std::unique_ptr<std::thread> scheduler_thread;
     mutable Mutex cs;
@@ -85,51 +85,52 @@ private:
     std::atomic<int64_t> lastCleanupTime{0};
 
 public:
-    explicit CChainLocksHandler(CChainState& chainstate, CQuorumManager& _qman, CSigningManager& _sigman,
-                                CSigSharesManager& _shareman, CSporkManager& sporkman, CTxMemPool& _mempool,
-                                const CMasternodeSync& mn_sync, bool is_masternode);
+    explicit CChainLocksHandler(CChainState& chainstate, CConnman& _connman, CMasternodeSync& mn_sync, CQuorumManager& _qman,
+                                CSigningManager& _sigman, CSigSharesManager& _shareman, CSporkManager& sporkManager,
+                                CTxMemPool& _mempool);
     ~CChainLocksHandler();
 
     void Start();
     void Stop();
 
-    bool AlreadyHave(const CInv& inv) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    bool GetChainLockByHash(const uint256& hash, CChainLockSig& ret) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    CChainLockSig GetBestChainLock() const EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool AlreadyHave(const CInv& inv) const LOCKS_EXCLUDED(cs);
+    bool GetChainLockByHash(const uint256& hash, CChainLockSig& ret) const LOCKS_EXCLUDED(cs);
+    CChainLockSig GetBestChainLock() const LOCKS_EXCLUDED(cs);
 
-    [[nodiscard]] MessageProcessingResult ProcessNewChainLock(NodeId from, const CChainLockSig& clsig,
-                                                              const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    PeerMsgRet ProcessMessage(const CNode& pfrom, const std::string& msg_type, CDataStream& vRecv);
+    PeerMsgRet ProcessNewChainLock(NodeId from, const CChainLockSig& clsig, const uint256& hash) LOCKS_EXCLUDED(cs);
 
-    void AcceptedBlockHeader(gsl::not_null<const CBlockIndex*> pindexNew) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void AcceptedBlockHeader(gsl::not_null<const CBlockIndex*> pindexNew) LOCKS_EXCLUDED(cs);
     void UpdatedBlockTip();
-    void TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime) EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    void BlockConnected(const std::shared_ptr<const CBlock>& pblock, gsl::not_null<const CBlockIndex*> pindex) EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, gsl::not_null<const CBlockIndex*> pindexDisconnected) EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    void CheckActiveState() EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    void TrySignChainTip() EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    void EnforceBestChainLock() EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    [[nodiscard]] MessageProcessingResult HandleNewRecoveredSig(const CRecoveredSig& recoveredSig) override
-        EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime) LOCKS_EXCLUDED(cs);
+    void BlockConnected(const std::shared_ptr<const CBlock>& pblock, gsl::not_null<const CBlockIndex*> pindex) LOCKS_EXCLUDED(cs);
+    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, gsl::not_null<const CBlockIndex*> pindexDisconnected) LOCKS_EXCLUDED(cs);
+    void CheckActiveState() LOCKS_EXCLUDED(cs);
+    void TrySignChainTip() LOCKS_EXCLUDED(cs);
+    void EnforceBestChainLock() LOCKS_EXCLUDED(cs);
+    void HandleNewRecoveredSig(const CRecoveredSig& recoveredSig) override LOCKS_EXCLUDED(cs);
 
-    bool HasChainLock(int nHeight, const uint256& blockHash) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    bool HasConflictingChainLock(int nHeight, const uint256& blockHash) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
-    VerifyRecSigStatus VerifyChainLock(const CChainLockSig& clsig) const;
+    bool HasChainLock(int nHeight, const uint256& blockHash) const LOCKS_EXCLUDED(cs);
+    bool HasConflictingChainLock(int nHeight, const uint256& blockHash) const LOCKS_EXCLUDED(cs);
+    bool VerifyChainLock(const CChainLockSig& clsig) const;
 
-    bool IsTxSafeForMining(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool IsTxSafeForMining(const uint256& txid) const LOCKS_EXCLUDED(cs);
 
 private:
     // these require locks to be held already
     bool InternalHasChainLock(int nHeight, const uint256& blockHash) const EXCLUSIVE_LOCKS_REQUIRED(cs);
     bool InternalHasConflictingChainLock(int nHeight, const uint256& blockHash) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
-    BlockTxs::mapped_type GetBlockTxs(const uint256& blockHash) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    BlockTxs::mapped_type GetBlockTxs(const uint256& blockHash) LOCKS_EXCLUDED(cs);
 
-    void Cleanup() EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void Cleanup() LOCKS_EXCLUDED(cs);
 };
 
 extern std::unique_ptr<CChainLocksHandler> chainLocksHandler;
 
-bool AreChainLocksEnabled(const CSporkManager& sporkman);
+bool AreChainLocksEnabled(const CSporkManager& sporkManager);
+bool ChainLocksSigningEnabled(const CSporkManager& sporkManager);
+
 } // namespace llmq
 
 #endif // BITCOIN_LLMQ_CHAINLOCKS_H

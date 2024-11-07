@@ -1,19 +1,19 @@
-Contributing to Dash Core
+Contributing to Gryphonmoon Core
 ============================
 
-The Dash Core project operates an open contributor model where anyone is
+The Gryphonmoon Core project operates an open contributor model where anyone is
 welcome to contribute towards development in the form of peer review, testing
 and patches. This document explains the practical process and guidelines for
 contributing.
 
-First, in terms of structure, there is no particular concept of "Dash Core
+First, in terms of structure, there is no particular concept of "Gryphonmoon Core
 developers" in the sense of privileged people. Open source often naturally
 revolves around a meritocracy where contributors earn trust from the developer
 community over time. Nevertheless, some hierarchy is necessary for practical
 purposes. As such, there are repository "maintainers" who are responsible for
 merging pull requests, as well as a "lead maintainer" who is responsible for the
-[release cycle](/doc/release-process.md) as well as overall merging, moderation
-and appointment of maintainers.
+release cycle as well as overall merging, moderation and appointment of
+maintainers.
 
 Getting Started
 ---------------
@@ -25,13 +25,13 @@ as a new contributor. It also will teach you much more about the code and
 process than opening pull requests. Please refer to the [peer review](#peer-review)
 section below.
 
-Before you start contributing, familiarize yourself with the Dash Core build
+Before you start contributing, familiarize yourself with the Gryphonmoon Core build
 system and tests. Refer to the documentation in the repository on how to build
-Dash Core and how to run the unit and functional tests.
+Gryphonmoon Core and how to run the unit and functional tests.
 
 There are many open issues of varying difficulty waiting to be fixed.
 If you're looking for somewhere to start contributing, check out the
-[good first issue](https://github.com/dashpay/dash/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+[good first issue](https://github.com/gogryphon/gryphonmoon/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 list.
 Some of them might no longer be applicable. So if you are interested, but
 unsure, you might want to leave a comment on the issue first.
@@ -52,7 +52,7 @@ and is also an effective way to request assistance if and when you need it.
 Communication Channels
 ----------------------
 
-Most communication about Dash Core development happens on Discord Server.
+Most communication about Gryphonmoon Core development happens on Discord Server.
 
 Discussion about codebase improvements happens in GitHub issues and pull
 requests.
@@ -124,7 +124,7 @@ include:
   - *log* Changes to log messages
   - *mining* for changes to the mining code
   - *net* for changes to the peer-to-peer network code
-  - *qt* for changes to dash-qt
+  - *qt* for changes to gryphonmoon-qt
   - *rest* for changes to the REST APIs
   - *rpc* for changes to the RPC APIs
   - *scripts* for changes to the scripts and tools
@@ -132,7 +132,6 @@ include:
   - *wallet* for changes to the wallet code
   - *zmq* for changes to the ZMQ APIs
   - *guix* for changes to the GUIX reproducible builds
-  - *stats* for changes to reporting of statistics
 
 Examples:
 
@@ -150,7 +149,7 @@ mailing list discussions).
 The description for a new pull request should not contain any `@` mentions. The
 PR description will be included in the commit message when the PR is merged and
 any users mentioned in the description will be annoyingly notified each time a
-fork of Dash Core copies the merge. Instead, make any username mentions in a
+fork of Gryphonmoon Core copies the merge. Instead, make any username mentions in a
 subsequent comment to the PR.
 
 ### Translation changes
@@ -169,14 +168,9 @@ in the body of the pull request to indicate tasks are pending.
 
 At this stage, one should expect comments and review from other contributors. You
 can add more commits to your pull request by committing them locally and pushing
-to your fork.
+to your fork until you have satisfied all feedback.
 
-You are expected to reply to any review comments before your pull request is
-merged. You may update the code or reject the feedback if you do not agree with
-it, but you should express so in a reply. If there is outstanding feedback and
-you are not actively working on it, your pull request may be closed.
-
-Please refer to the [peer review](#peer-review) section below for more details.
+Note: Code review is a burdensome but important part of the development process, and as such, certain types of pull requests are rejected. In general, if the **improvements** do not warrant the **review effort** required, the PR has a high chance of being rejected. It is up to the PR author to convince the reviewers that the changes warrant the review effort, and if reviewers are "Concept NACK'ing" the PR, the author may need to present arguments and/or do research backing their suggested changes.
 
 ### Squashing Commits
 
@@ -267,11 +261,11 @@ where possible keep them short, uncomplex and easy to verify.
 "Decision Making" Process
 -------------------------
 
-The following applies to code changes to the Dash Core project (and related
-projects such as libsecp256k1), and is not to be confused with overall Dash
+The following applies to code changes to the Gryphonmoon Core project (and related
+projects such as libsecp256k1), and is not to be confused with overall Gryphonmoon
 Network Protocol consensus changes.
 
-Whether a pull request is merged into Dash Core rests with the project merge
+Whether a pull request is merged into Gryphonmoon Core rests with the project merge
 maintainers and ultimately the project lead.
 
 Maintainers will take into consideration if a patch is in line with the general
@@ -290,7 +284,7 @@ In general, all pull requests must:
     demonstrating the bug and also proving the fix. This helps prevent regression.
   - Change relevant comments and documentation when behaviour of code changes.
 
-Patches that change Dash consensus rules are considerably more involved than
+Patches that change Gryphonmoon consensus rules are considerably more involved than
 normal because they affect the entire ecosystem and so must be preceded by
 extensive mailing list discussions and have a numbered BIP. While each case will
 be different, one should be prepared to expend more time and effort than for
@@ -306,14 +300,6 @@ test out the patch set and opine on the technical merits of the patch. Project
 maintainers take into account the peer review when determining if there is
 consensus to merge a pull request (remember that discussions may have been
 spread out over GitHub, mailing list and IRC discussions).
-
-Code review is a burdensome but important part of the development process, and
-as such, certain types of pull requests are rejected. In general, if the
-**improvements** do not warrant the **review effort** required, the PR has a
-high chance of being rejected. It is up to the PR author to convince the
-reviewers that the changes warrant the review effort, and if reviewers are
-"Concept NACK'ing" the PR, the author may need to present arguments and/or do
-research backing their suggested changes.
 
 #### Conceptual Review
 
@@ -353,7 +339,7 @@ higher in terms of discussion and peer review requirements, keeping in mind that
 mistakes could be very costly to the wider community. This includes refactoring
 of consensus-critical code.
 
-Where a patch set proposes to change the Dash consensus, it must have been
+Where a patch set proposes to change the Gryphonmoon consensus, it must have been
 discussed extensively on the mailing list and IRC, be accompanied by a widely
 discussed BIP and have a generally widely perceived technical consensus of being
 a worthwhile change based on the judgement of the maintainers.
@@ -362,13 +348,24 @@ a worthwhile change based on the judgement of the maintainers.
 
 When someone rebases their PR, it can often be very difficult to ensure that
 extra changes were not included in that force push. This changes could be anything
-from merge conflicts to someone attempting to sneak something into the PR.
-In order for `git range-diff` to work, both the before and after commits must be
-present locally. See chapter [rebasing changes](#rebasing-changes)
+from merge conflicts to someone attempting to sneak something into the PR. To check
+that a PR is the same before and after force push, you can use the following function.
+Place this function in your `~/.bashrc`. In order for this function to work, both the
+before and after commits must be present locally.
+
+```
+function gfd() {
+        local fp1=$(git show-branch --merge-base develop $1)
+        local fp2=$(git show-branch --merge-base develop $2)
+        echo fp1=$fp1
+        echo fp2=$fp2
+        diff --color=always -u -I'^[^-+]' <(git diff $fp1..$1) <(git diff $fp2..$2)
+}
+```
 
 ### Finding Reviewers
 
-The review process is normally fairly responsive on the Dash Core repository, however
+The review process is normally fairly responsive on the Gryphonmoon Core repository, however
 this might not always be the case. If you find that you've been waiting
 for a pull request to be given attention for several months, there may be a number
 of reasons for this, some of which you can do something about:
@@ -424,10 +421,10 @@ https://github.com/bitcoin/bitcoin/pull/16189).
 Also see the [backport.py script](
 https://github.com/bitcoin-core/bitcoin-maintainer-tools#backport).
 
-Bitcoin Backports are an incredibly valuable part of Dash's development. Backporting allows us to easily implement new
+Bitcoin Backports are an incredibly valuable part of Gryphonmoon's development. Backporting allows us to easily implement new
 features, improvements and fixes as bitcoin implements them.
 
-To see detailed statistics & progress see Google Sheet tracker: [Bitcoin backports for Dash](https://docs.google.com/spreadsheets/d/1DnKxat0S0H62CJOzXpKGPXTa8hgoVOjGYZzoClmGSB8/edit?usp=sharing).
+To see detailed statistics & progress see Google Sheet tracker: [Bitcoin backports for Gryphonmoon](https://docs.google.com/spreadsheets/d/1DnKxat0S0H62CJOzXpKGPXTa8hgoVOjGYZzoClmGSB8/edit?usp=sharing).
 You should use this sheet to find what PRs to backport and its commit.
 
 Updating the Spreadsheet
@@ -494,6 +491,11 @@ This will create a text file with all the original file's lines in descending or
 the contents onto the [Tracker](https://docs.google.com/spreadsheets/d/1DnKxat0S0H62CJOzXpKGPXTa8hgoVOjGYZzoClmGSB8/edit?usp=sharing).
 
 When pasting the contents, make sure to split the values into the cells so every line is not present under commit hash.
+
+Release Policy
+--------------
+
+The project leader is the release manager for each Gryphonmoon Core release.
 
 Copyright
 ---------

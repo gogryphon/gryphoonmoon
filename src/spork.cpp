@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,6 @@
 #include <logging.h>
 #include <messagesigner.h>
 #include <net.h>
-#include <net_processing.h>
 #include <netmessagemaker.h>
 #include <primitives/block.h>
 #include <protocol.h>
@@ -23,6 +22,8 @@
 #include <validation.h>
 
 #include <string>
+
+std::unique_ptr<CSporkManager> sporkManager;
 
 const std::string SporkStore::SERIALIZATION_VERSION_STRING = "CSporkManager-Version-2";
 
@@ -128,26 +129,30 @@ void CSporkManager::CheckAndRemove()
     }
 }
 
-PeerMsgRet CSporkManager::ProcessMessage(CNode& peer, CConnman& connman, PeerManager& peerman, std::string_view msg_type, CDataStream& vRecv)
+PeerMsgRet CSporkManager::ProcessMessage(CNode& peer, CConnman& connman, std::string_view msg_type, CDataStream& vRecv)
 {
     if (msg_type == NetMsgType::SPORK) {
-        return ProcessSpork(peer, peerman, vRecv);
+        return ProcessSpork(peer, connman, vRecv);
     } else if (msg_type == NetMsgType::GETSPORKS) {
         ProcessGetSporks(peer, connman);
     }
     return {};
 }
 
-PeerMsgRet CSporkManager::ProcessSpork(const CNode& peer, PeerManager& peerman, CDataStream& vRecv)
+PeerMsgRet CSporkManager::ProcessSpork(const CNode& peer, CConnman& connman, CDataStream& vRecv)
 {
     CSporkMessage spork;
     vRecv >> spork;
 
     uint256 hash = spork.GetHash();
 
-    WITH_LOCK(::cs_main, peerman.EraseObjectRequest(peer.GetId(), CInv(MSG_SPORK, hash)));
-    std::string strLogMsg{strprintf("SPORK -- hash: %s id: %d value: %10d peer=%d", hash.ToString(), spork.nSporkID,
-                                    spork.nValue, peer.GetId())};
+    std::string strLogMsg;
+    {
+        LOCK(cs_main);
+        EraseObjectRequest(peer.GetId(), CInv(MSG_SPORK, hash));
+        if (!::ChainActive().Tip()) return {};
+        strLogMsg = strprintf("SPORK -- hash: %s id: %d value: %10d bestHeight: %d peer=%d", hash.ToString(), spork.nSporkID, spork.nValue, ::ChainActive().Height(), peer.GetId());
+    }
 
     if (spork.nTimeSigned > GetAdjustedTime() + 2 * 60 * 60) {
         LogPrint(BCLog::SPORK, "CSporkManager::ProcessSpork -- ERROR: too far into the future\n");
@@ -190,7 +195,7 @@ PeerMsgRet CSporkManager::ProcessSpork(const CNode& peer, PeerManager& peerman, 
         WITH_LOCK(cs_mapSporksCachedActive, mapSporksCachedActive.erase(spork.nSporkID));
         WITH_LOCK(cs_mapSporksCachedValues, mapSporksCachedValues.erase(spork.nSporkID));
     }
-    spork.Relay(peerman);
+    spork.Relay(connman);
     return {};
 }
 
@@ -205,7 +210,7 @@ void CSporkManager::ProcessGetSporks(CNode& peer, CConnman& connman)
 }
 
 
-bool CSporkManager::UpdateSpork(PeerManager& peerman, SporkId nSporkID, SporkValue nValue)
+bool CSporkManager::UpdateSpork(SporkId nSporkID, SporkValue nValue, CConnman& connman)
 {
     CSporkMessage spork(nSporkID, nValue, GetAdjustedTime());
 
@@ -232,7 +237,7 @@ bool CSporkManager::UpdateSpork(PeerManager& peerman, SporkId nSporkID, SporkVal
         WITH_LOCK(cs_mapSporksCachedValues, mapSporksCachedValues.erase(spork.nSporkID));
     }
 
-    spork.Relay(peerman);
+    spork.Relay(connman);
     return true;
 }
 
@@ -259,16 +264,6 @@ bool CSporkManager::IsSporkActive(SporkId nSporkID) const
 
 SporkValue CSporkManager::GetSporkValue(SporkId nSporkID) const
 {
-    // Harden all sporks on Mainnet
-    if (!Params().IsTestChain()) {
-        switch (nSporkID) {
-            case SPORK_21_QUORUM_ALL_CONNECTED:
-                return 1;
-            default:
-                return 0;
-        }
-    }
-
     LOCK(cs);
 
     if (auto opt_sporkValue = SporkValueIfActive(nSporkID)) {
@@ -458,8 +453,8 @@ std::optional<CKeyID> CSporkMessage::GetSignerKeyID() const
     return {pubkeyFromSig.GetID()};
 }
 
-void CSporkMessage::Relay(PeerManager& peerman) const
+void CSporkMessage::Relay(CConnman& connman) const
 {
     CInv inv(MSG_SPORK, GetHash());
-    peerman.RelayInv(inv);
+    connman.RelayInv(inv);
 }

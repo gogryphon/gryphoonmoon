@@ -62,7 +62,8 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
     node.setContext(&test.m_node);
     std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(node.context()->chain.get(), node.context()->coinjoin_loader.get(), "", CreateMockWalletDatabase());
     wallet->SetupLegacyScriptPubKeyMan();
-    wallet->LoadWallet();
+    bool firstRun;
+    wallet->LoadWallet(firstRun);
 
     auto build_address = [wallet]() {
         CKey key;
@@ -149,7 +150,7 @@ void AddressBookTests::addressBookTests()
         // and fails to handle returned nulls
         // (https://bugreports.qt.io/browse/QTBUG-49686).
         QWARN("Skipping AddressBookTests on mac build with 'minimal' platform set due to Qt bugs. To run AppTests, invoke "
-              "with 'QT_QPA_PLATFORM=cocoa test_dash-qt' on mac, or else use a linux or windows build.");
+              "with 'QT_QPA_PLATFORM=cocoa test_gryphonmoon-qt' on mac, or else use a linux or windows build.");
         return;
     }
 #endif

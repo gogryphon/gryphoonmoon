@@ -23,6 +23,7 @@ from test_framework.messages import (
     CTransaction,
     CTxIn,
     CTxOut,
+    ToHex,
 )
 from test_framework.script import (
     CScript,
@@ -81,10 +82,10 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         index_hash_options = ['none', 'muhash']
 
         # Generate a normal transaction and mine it
-        self.generate(node, 101)
+        node.generate(101)
         address = self.nodes[0].get_deterministic_priv_key().address
         node.sendtoaddress(address=address, amount=10, subtractfeefromamount=True)
-        self.generate(node, 1)
+        node.generate(1)
 
         self.sync_blocks(timeout=120)
 
@@ -106,7 +107,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         self.log.info("Test that gettxoutsetinfo() can get fetch data on specific heights with index")
 
         # Generate a new tip
-        self.generate(node, 5)
+        node.generate(5)
 
         for hash_option in index_hash_options:
             # Fetch old stats by height
@@ -150,7 +151,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
             assert_equal(res5['block_info'], {
                 'unspendable': 0,
                 'prevout_spent': 500,
-                'new_outputs_ex_coinbase': Decimal('499.99999775'),
+                'new_outputs_ex_coinbase': Decimal('499.99699775'),
                 'coinbase': Decimal('500.00000225'),
                 'unspendables': {
                     'genesis_block': 0,
@@ -178,26 +179,27 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         # Generate and send another tx with an OP_RETURN output (which is unspendable)
         tx2 = CTransaction()
         tx2.vin.append(CTxIn(COutPoint(int(tx1_txid, 16), n), b''))
-        tx2.vout.append(CTxOut(int(Decimal('20.99') * COIN), CScript([OP_RETURN] + [OP_FALSE]*30)))
-        tx2_hex = self.nodes[0].signrawtransactionwithwallet(tx2.serialize().hex())['hex']
+        tx2.vout.append(CTxOut(int(20.99 * COIN), CScript([OP_RETURN] + [OP_FALSE]*30)))
+        tx2_hex = self.nodes[0].signrawtransactionwithwallet(ToHex(tx2))['hex']
         self.nodes[0].sendrawtransaction(tx2_hex)
 
         # Include both txs in a block
-        self.generate(self.nodes[0], 1)
+        self.nodes[0].generate(1)
+        self.sync_all()
 
         for hash_option in index_hash_options:
             # Check all amounts were registered correctly
             res6 = index_node.gettxoutsetinfo(hash_option, 108)
-            assert_equal(res6['total_unspendable_amount'], Decimal('70.99000000'))
+            assert_equal(res6['total_unspendable_amount'], Decimal('70.98996999'))
             assert_equal(res6['block_info'], {
-                'unspendable': Decimal('20.99000000'),
+                'unspendable': Decimal('20.98996999'),
                 'prevout_spent': 511,
-                'new_outputs_ex_coinbase': Decimal('489.99999741'),
-                'coinbase': Decimal('500.01000259'),
+                'new_outputs_ex_coinbase': Decimal('489.99699741'),
+                'coinbase': Decimal('500.01000260'),
                 'unspendables': {
                     'genesis_block': 0,
                     'bip30': 0,
-                    'scripts': Decimal('20.99000000'),
+                    'scripts': Decimal('20.98996999'),
                     'unclaimed_rewards': 0
                 }
             })
@@ -214,12 +216,12 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         block_time = self.nodes[0].getblock(tip)['time'] + 1
         block = create_block(int(tip, 16), cb, block_time)
         block.solve()
-        self.nodes[0].submitblock(block.serialize().hex())
+        self.nodes[0].submitblock(ToHex(block))
         self.sync_all()
 
         for hash_option in index_hash_options:
             res7 = index_node.gettxoutsetinfo(hash_option, 109)
-            assert_equal(res7['total_unspendable_amount'], Decimal('530.99000000'))
+            assert_equal(res7['total_unspendable_amount'], Decimal('530.98996999'))
             assert_equal(res7['block_info'], {
                 'unspendable': 460,
                 'prevout_spent': 0,
@@ -241,28 +243,9 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         res9 = index_node.gettxoutsetinfo('muhash')
         assert_equal(res8, res9)
 
-        self.generate(index_node, 1, sync_fun=self.no_op)
+        index_node.generate(1)
         res10 = index_node.gettxoutsetinfo('muhash')
         assert(res8['txouts'] < res10['txouts'])
-
-        self.log.info("Test that the index works with -reindex")
-
-        self.restart_node(1, extra_args=["-coinstatsindex", "-reindex"])
-        res11 = index_node.gettxoutsetinfo('muhash')
-        assert_equal(res11, res10)
-
-        self.log.info("Test that -reindex-chainstate is disallowed with coinstatsindex")
-
-        self.stop_node(1)
-        self.nodes[1].assert_start_raises_init_error(
-            expected_msg='Error: -reindex-chainstate option is not compatible with -coinstatsindex. '
-            'Please temporarily disable coinstatsindex while using -reindex-chainstate, or replace -reindex-chainstate with -reindex to fully rebuild all indexes.',
-            extra_args=['-coinstatsindex', '-reindex-chainstate'],
-        )
-        self.restart_node(1, extra_args=["-coinstatsindex"])
-
-        self.log.info("Test obtaining info for a non-existent block hash")
-        assert_raises_rpc_error(-5, "Block not found", index_node.gettxoutsetinfo, hash_type="none", hash_or_height="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", use_index=True)
 
     def _test_use_index_option(self):
         self.log.info("Test use_index option for nodes running the index")
@@ -279,14 +262,14 @@ class CoinStatsIndexTest(BitcoinTestFramework):
 
         # Generate two block, let the index catch up, then invalidate the blocks
         index_node = self.nodes[1]
-        reorg_blocks = self.generatetoaddress(index_node, 2, index_node.getnewaddress())
+        reorg_blocks = index_node.generatetoaddress(2, index_node.getnewaddress())
         reorg_block = reorg_blocks[1]
         res_invalid = index_node.gettxoutsetinfo('muhash')
         index_node.invalidateblock(reorg_blocks[0])
         assert_equal(index_node.gettxoutsetinfo('muhash')['height'], 110)
 
         # Add two new blocks
-        block = self.generate(index_node, 2, sync_fun=self.no_op)[1]
+        block = index_node.generate(2)[1]
         res = index_node.gettxoutsetinfo(hash_type='muhash', hash_or_height=None, use_index=False)
 
         # Test that the result of the reorged block is not returned for its old block height
@@ -302,7 +285,8 @@ class CoinStatsIndexTest(BitcoinTestFramework):
 
         # Add another block, so we don't depend on reconsiderblock remembering which
         # blocks were touched by invalidateblock
-        self.generate(index_node, 1)
+        index_node.generate(1)
+        self.sync_all()
 
         # Ensure that removing and re-adding blocks yields consistent results
         block = index_node.getblockhash(99)

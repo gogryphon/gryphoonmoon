@@ -10,7 +10,7 @@
 #error "define the box template to use in BOX_T"
 #endif
 
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 TEST_CASE("construction and copy")
 {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2020 The Bitcoin Core developers
+# Copyright (c) 2017 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """An example functional test
@@ -148,7 +148,8 @@ class ExampleTest(BitcoinTestFramework):
         peer_messaging = self.nodes[0].add_p2p_connection(BaseNode())
 
         # Generating a block on one of the nodes will get us out of IBD
-        blocks = [int(self.generate(self.nodes[0], sync_fun=lambda: self.sync_all(self.nodes[0:2]), nblocks=1)[0], 16)]
+        blocks = [int(self.nodes[0].generate(nblocks=1)[0], 16)]
+        self.sync_all(self.nodes[0:2])
 
         # Notice above how we called an RPC by calling a method with the same
         # name on the node object. Notice also how we used a keyword argument
@@ -215,11 +216,10 @@ class ExampleTest(BitcoinTestFramework):
         self.log.info("Check that each block was received only once")
         # The network thread uses a global lock on data access to the P2PConnection objects when sending and receiving
         # messages. The test thread should acquire the global lock before accessing any P2PConnection data to avoid locking
-        # and synchronization issues. Note p2p.wait_until() acquires this global lock internally when testing the predicate.
+        # and synchronization issues. Note wait_until() acquires this global lock when testing the predicate.
         with p2p_lock:
             for block in peer_receiving.block_receive_map.values():
                 assert_equal(block, 1)
-
 
 if __name__ == '__main__':
     ExampleTest().main()

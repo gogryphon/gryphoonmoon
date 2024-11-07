@@ -15,7 +15,7 @@
 #include <vector>
 #include <iostream>
 
-#include <catch2/catch.hpp>
+#include <doctest.h>
 
 using namespace immer;
 
@@ -27,7 +27,7 @@ TEST_CASE("instantiation")
 
 TEST_CASE("push back one element")
 {
-    SECTION("one element")
+    SUBCASE("one element")
     {
         const auto v1 = dvektor<int>{};
         auto v2       = v1.push_back(42);
@@ -36,7 +36,7 @@ TEST_CASE("push back one element")
         CHECK(v2[0] == 42);
     }
 
-    SECTION("many elements")
+    SUBCASE("many elements")
     {
         const auto n = 666u;
         auto v       = dvektor<unsigned>{};
@@ -56,7 +56,7 @@ TEST_CASE("update")
     for (auto i = 0u; i < n; ++i)
         v = v.push_back(i);
 
-    SECTION("assoc")
+    SUBCASE("assoc")
     {
         const auto u = v.assoc(3u, 13u);
         CHECK(u.size() == v.size());
@@ -67,7 +67,7 @@ TEST_CASE("update")
         CHECK(v[3u] == 3u);
     }
 
-    SECTION("assoc further")
+    SUBCASE("assoc further")
     {
         for (auto i = n; i < 666; ++i)
             v = v.push_back(i);
@@ -88,7 +88,7 @@ TEST_CASE("update")
         CHECK(v[200u] == 200u);
     }
 
-    SECTION("assoc further more")
+    SUBCASE("assoc further more")
     {
         auto v = immer::dvektor<unsigned, 4>{};
 
@@ -101,7 +101,7 @@ TEST_CASE("update")
         }
     }
 
-    SECTION("update")
+    SUBCASE("update")
     {
         const auto u = v.update(10u, [](auto x) { return x + 10; });
         CHECK(u.size() == v.size());
@@ -123,13 +123,13 @@ TEST_CASE("big")
     for (auto i = 0u; i < n; ++i)
         v = v.push_back(i);
 
-    SECTION("read")
+    SUBCASE("read")
     {
         for (auto i = 0u; i < n; ++i)
             CHECK(v[i] == i);
     }
 
-    SECTION("assoc")
+    SUBCASE("assoc")
     {
         for (auto i = 0u; i < n; ++i) {
             v = v.assoc(i, i + 1);
@@ -146,7 +146,7 @@ TEST_CASE("iterator")
     for (auto i = 0u; i < n; ++i)
         v = v.push_back(i);
 
-    SECTION("works with range loop")
+    SUBCASE("works with range loop")
     {
         auto i = 0u;
         for (const auto& x : v)
@@ -154,16 +154,16 @@ TEST_CASE("iterator")
         CHECK(i == v.size());
     }
 
-    SECTION("works with standard algorithms")
+    SUBCASE("works with standard algorithms")
     {
         auto s = std::vector<unsigned>(n);
         std::iota(s.begin(), s.end(), 0u);
         std::equal(v.begin(), v.end(), s.begin(), s.end());
     }
 
-    SECTION("can go back from end") { CHECK(n - 1 == *--v.end()); }
+    SUBCASE("can go back from end") { CHECK(n - 1 == *--v.end()); }
 
-    SECTION("works with reversed range adaptor")
+    SUBCASE("works with reversed range adaptor")
     {
         auto r = v | boost::adaptors::reversed;
         auto i = n;
@@ -171,7 +171,7 @@ TEST_CASE("iterator")
             CHECK(x == --i);
     }
 
-    SECTION("works with strided range adaptor")
+    SUBCASE("works with strided range adaptor")
     {
         auto r = v | boost::adaptors::strided(5);
         auto i = 0u;
@@ -179,14 +179,14 @@ TEST_CASE("iterator")
             CHECK(x == 5 * i++);
     }
 
-    SECTION("works reversed")
+    SUBCASE("works reversed")
     {
         auto i = n;
         for (auto iter = v.rbegin(), last = v.rend(); iter != last; ++iter)
             CHECK(*iter == --i);
     }
 
-    SECTION("advance and distance")
+    SUBCASE("advance and distance")
     {
         auto i1 = v.begin();
         auto i2 = i1 + 100;

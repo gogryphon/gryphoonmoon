@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2020 The Bitcoin Core developers
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,12 +18,12 @@
 #include <attributes.h>
 #include <compat.h>
 #include <compat/assumptions.h>
-#include <consensus/amount.h>
 #include <fs.h>
 #include <logging.h>
 #include <sync.h>
 #include <util/settings.h>
 #include <util/time.h>
+#include <amount.h>
 
 #include <exception>
 #include <map>
@@ -34,9 +34,21 @@
 #include <utility>
 #include <vector>
 
-//Dash only features
+// Debugging macros
+
+// Uncomment the following line to enable debugging messages
+// or enable on a per file basis prior to inclusion of util.h
+//#define ENABLE_GRYPHONMOON_DEBUG
+#ifdef ENABLE_GRYPHONMOON_DEBUG
+#define DBG( x ) x
+#else
+#define DBG( x )
+#endif
+
+//Gryphonmoon only features
 
 extern bool fMasternodeMode;
+extern bool fDisableGovernance;
 extern int nWalletBackups;
 extern const std::string gCoinJoinName;
 
@@ -75,13 +87,7 @@ void DirectoryCommit(const fs::path &dirname);
 bool TruncateFile(FILE *file, unsigned int length);
 int RaiseFileDescriptorLimit(int nMinFD);
 void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
-
-/**
- * Rename src to dest.
- * @return true if the rename was successful.
- */
 [[nodiscard]] bool RenameOver(fs::path src, fs::path dest);
-
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 void UnlockDirectory(const fs::path& directory, const std::string& lockfile_name);
 bool DirIsWritable(const fs::path& directory);
@@ -102,8 +108,14 @@ void ReleaseDirectoryLocks();
 
 bool TryCreateDirectories(const fs::path& p);
 fs::path GetDefaultDataDir();
+// The blocks directory is always net specific.
+const fs::path &GetBlocksDir();
+const fs::path &GetDataDir(bool fNetSpecific = true);
+fs::path GetBackupsDir();
 // Return true if -datadir option points to a valid directory or is not specified.
 bool CheckDataDirOption();
+/** Tests only */
+void ClearDatadirCache();
 fs::path GetConfigFile(const std::string& confPath);
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
@@ -130,7 +142,7 @@ UniValue RunCommandParseJSON(const std::string& str_command, const std::string& 
  * the datadir if they are not absolute.
  *
  * @param path The path to be conditionally prefixed with datadir.
- * @param net_specific Use network specific datadir variant
+ * @param net_specific Forwarded to GetDataDir().
  * @return The normalized path.
  */
 fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific = true);
@@ -193,7 +205,6 @@ public:
         NETWORK_ONLY = 0x200,
         // This argument's value is sensitive (such as a password).
         SENSITIVE = 0x400,
-        COMMAND = 0x800,
     };
 
 protected:
@@ -206,15 +217,10 @@ protected:
 
     mutable RecursiveMutex cs_args;
     util::Settings m_settings GUARDED_BY(cs_args);
-    std::vector<std::string> m_command GUARDED_BY(cs_args);
     std::string m_network GUARDED_BY(cs_args);
     std::set<std::string> m_network_only_args GUARDED_BY(cs_args);
     std::map<OptionsCategory, std::map<std::string, Arg>> m_available_args GUARDED_BY(cs_args);
-    bool m_accept_any_command GUARDED_BY(cs_args){true};
     std::list<SectionInfo> m_config_sections GUARDED_BY(cs_args);
-    mutable fs::path m_cached_blocks_path GUARDED_BY(cs_args);
-    mutable fs::path m_cached_datadir_path GUARDED_BY(cs_args);
-    mutable fs::path m_cached_network_datadir_path GUARDED_BY(cs_args);
 
     [[nodiscard]] bool ReadConfigStream(std::istream& stream, const std::string& filepath, std::string& error, bool ignore_invalid_keys = false);
 
@@ -225,7 +231,6 @@ protected:
      */
     bool UseDefaultSection(const std::string& arg) const EXCLUSIVE_LOCKS_REQUIRED(cs_args);
 
- public:
     /**
      * Get setting value.
      *
@@ -240,6 +245,7 @@ protected:
      */
     std::vector<util::SettingsValue> GetSettingsList(const std::string& arg) const;
 
+public:
     ArgsManager();
     ~ArgsManager();
 
@@ -264,64 +270,10 @@ protected:
      */
     const std::list<SectionInfo> GetUnrecognizedSections() const;
 
-    struct Command {
-        /** The command (if one has been registered with AddCommand), or empty */
-        std::string command;
-        /**
-         * If command is non-empty: Any args that followed it
-         * If command is empty: The unregistered command and any args that followed it
-         */
-        std::vector<std::string> args;
-    };
-    /**
-     * Get the command and command args (returns std::nullopt if no command provided)
-     */
-    std::optional<const Command> GetCommand() const;
-
     /**
      * Return the map of all the args passed via the command line
      */
     const std::map<std::string, std::vector<util::SettingsValue>> GetCommandLineArgs() const;
-
-    /**
-     * Get a normalized path from a specified pathlike argument
-     *
-     * It is guaranteed that the returned path has no trailing slashes.
-     *
-     * @param pathlike_arg Pathlike argument to get a path from (e.g., "-datadir", "-blocksdir" or "-walletdir")
-     * @return Normalized path which is get from a specified pathlike argument
-     */
-    fs::path GetPathArg(std::string pathlike_arg) const;
-
-    /**
-     * Get blocks directory path
-     *
-     * @return Blocks path which is network specific
-     */
-    const fs::path GetBlocksDirPath() const;
-
-    /**
-     * Get data directory path
-     *
-     * @return Absolute path on success, otherwise an empty path when a non-directory path would be returned
-     * @post Returned directory path is created unless it is empty
-     */
-    const fs::path GetDataDirBase() const { return GetDataDir(false); }
-
-    /**
-     * Get data directory path with appended network identifier
-     *
-     * @return Absolute path on success, otherwise an empty path when a non-directory path would be returned
-     * @post Returned directory path is created unless it is empty
-     */
-    const fs::path GetDataDirNet() const { return GetDataDir(true); }
-
-    fs::path GetBackupsDirPath();
-
-    /**
-     * Clear cached directory paths
-     */
-    void ClearPathCache();
 
     /**
      * Return a vector of strings of the given argument
@@ -417,11 +369,6 @@ protected:
     void AddArg(const std::string& name, const std::string& help, unsigned int flags, const OptionsCategory& cat);
 
     /**
-     * Add subcommand
-     */
-    void AddCommand(const std::string& cmd, const std::string& help, const OptionsCategory& cat);
-
-    /**
      * Add many hidden arguments
      */
     void AddHiddenArgs(const std::vector<std::string>& args);
@@ -486,15 +433,6 @@ protected:
     void LogArgs() const;
 
 private:
-    /**
-     * Get data directory path
-     *
-     * @param net_specific Append network identifier to the returned path
-     * @return Absolute path on success, otherwise an empty path when a non-directory path would be returned
-     * @post Returned directory path is created unless it is empty
-     */
-    const fs::path GetDataDir(bool net_specific) const;
-
     // Helper function for LogArgs().
     void logArgsPrefix(
         const std::string& prefix,

@@ -4,8 +4,8 @@
 
 #include <interfaces/wallet.h>
 
+#include <amount.h>
 #include <coinjoin/client.h>
-#include <consensus/amount.h>
 #include <interfaces/chain.h>
 #include <interfaces/coinjoin.h>
 #include <interfaces/handler.h>
@@ -18,7 +18,6 @@
 #include <uint256.h>
 #include <util/check.h>
 #include <util/system.h>
-#include <util/translation.h>
 #include <util/ui_change_type.h>
 #include <validation.h>
 #include <wallet/context.h>
@@ -82,7 +81,6 @@ WalletTx MakeWalletTx(CWallet& wallet, const CWalletTx& wtx)
     result.time = wtx.GetTxTime();
     result.value_map = wtx.mapValue;
     result.is_coinbase = wtx.IsCoinBase();
-    result.is_platform_transfer = wtx.IsPlatformTransfer();
     // The determination of is_denominate is based on simplified checks here because in this part of the code
     // we only want to know about mixing transactions belonging to this specific wallet.
     result.is_denominate = wtx.tx->vin.size() == wtx.tx->vout.size() && // Number of inputs is same as number of outputs
@@ -156,8 +154,11 @@ public:
     std::string getWalletName() override { return m_wallet->GetName(); }
     bool getNewDestination(const std::string label, CTxDestination& dest) override
     {
-        LOCK(m_wallet->cs_wallet);
-        bilingual_str error;
+        auto spk_man = m_wallet->GetLegacyScriptPubKeyMan();
+        if (!spk_man) {
+            return false;
+        }
+        std::string error;
         return m_wallet->GetNewDestination(label, dest, error);
     }
     bool getPubKey(const CScript& script, const CKeyID& address, CPubKey& pub_key) override
@@ -229,14 +230,22 @@ public:
         }
         return result;
     }
-    std::vector<std::string> getAddressReceiveRequests() override {
-        LOCK(m_wallet->cs_wallet);
-        return m_wallet->GetAddressReceiveRequests();
-    }
-    bool setAddressReceiveRequest(const CTxDestination& dest, const std::string& id, const std::string& value) override {
+    bool addDestData(const CTxDestination& dest, const std::string& key, const std::string& value) override
+    {
         LOCK(m_wallet->cs_wallet);
         WalletBatch batch{m_wallet->GetDatabase()};
-        return m_wallet->SetAddressReceiveRequest(batch, dest, id, value);
+        return m_wallet->AddDestData(batch, dest, key, value);
+    }
+    bool eraseDestData(const CTxDestination& dest, const std::string& key) override
+    {
+        LOCK(m_wallet->cs_wallet);
+        WalletBatch batch{m_wallet->GetDatabase()};
+        return m_wallet->EraseDestData(batch, dest, key);
+    }
+    std::vector<std::string> getDestValues(const std::string& prefix) override
+    {
+        LOCK(m_wallet->cs_wallet);
+        return m_wallet->GetDestValues(prefix);
     }
     void lockCoin(const COutPoint& output) override
     {
@@ -273,9 +282,8 @@ public:
         LOCK(m_wallet->cs_wallet);
         ReserveDestination m_dest(m_wallet.get());
         CTransactionRef tx;
-        FeeCalculation fee_calc_out;
         if (!m_wallet->CreateTransaction(recipients, tx, fee, change_pos,
-                fail_reason, coin_control, fee_calc_out, sign)) {
+                fail_reason, coin_control, sign)) {
             return {};
         }
         return tx;
@@ -370,9 +378,9 @@ public:
     TransactionError fillPSBT(int sighash_type,
         bool sign,
         bool bip32derivs,
-        size_t* n_signed,
         PartiallySignedTransaction& psbtx,
-        bool& complete) override
+        bool& complete,
+        size_t* n_signed) override
     {
         return m_wallet->FillPSBT(psbtx, complete, sighash_type, sign, bip32derivs, n_signed);
     }
@@ -511,7 +519,6 @@ public:
     {
         RemoveWallet(m_wallet, false /* load_on_start */);
     }
-    bool isLegacy() override { return m_wallet->IsLegacy(); }
     std::unique_ptr<Handler> handleUnload(UnloadFn fn) override
     {
         return MakeHandler(m_wallet->NotifyUnload.connect(fn));
@@ -527,13 +534,13 @@ public:
     std::unique_ptr<Handler> handleAddressBookChanged(AddressBookChangedFn fn) override
     {
         return MakeHandler(m_wallet->NotifyAddressBookChanged.connect(
-            [fn](const CTxDestination& address, const std::string& label, bool is_mine,
-                 const std::string& purpose, ChangeType status) { fn(address, label, is_mine, purpose, status); }));
+            [fn](CWallet*, const CTxDestination& address, const std::string& label, bool is_mine,
+                const std::string& purpose, ChangeType status) { fn(address, label, is_mine, purpose, status); }));
     }
     std::unique_ptr<Handler> handleTransactionChanged(TransactionChangedFn fn) override
     {
         return MakeHandler(m_wallet->NotifyTransactionChanged.connect(
-            [fn](const uint256& txid, ChangeType status) { fn(txid, status); }));
+            [fn](CWallet*, const uint256& txid, ChangeType status) { fn(txid, status); }));
     }
     std::unique_ptr<Handler> handleInstantLockReceived(InstantLockReceivedFn fn) override
     {
@@ -575,9 +582,7 @@ public:
     {
         for (const CRPCCommand& command : GetWalletRPCCommands()) {
             m_rpc_commands.emplace_back(command.category, command.name, [this, &command](const JSONRPCRequest& request, UniValue& result, bool last_handler) {
-                JSONRPCRequest wallet_request = request;
-                wallet_request.context = m_context;
-                return command.actor(wallet_request, result, last_handler);
+                return command.actor({request, m_context}, result, last_handler);
             }, command.argNames, command.unique_id);
             m_rpc_handlers.emplace_back(m_context.chain->handleRpc(m_rpc_commands.back()));
         }
@@ -609,21 +614,15 @@ public:
         assert(m_context.m_coinjoin_loader);
         return MakeWallet(LoadWallet(*m_context.chain, *m_context.m_coinjoin_loader, name, true /* load_on_start */, options, status, error, warnings));
     }
-    std::unique_ptr<Wallet> restoreWallet(const fs::path& backup_file, const std::string& wallet_name, bilingual_str& error, std::vector<bilingual_str>& warnings) override
-    {
-        DatabaseStatus status;
-        assert(m_context.m_coinjoin_loader);
-        return MakeWallet(RestoreWallet(*m_context.chain, *m_context.m_coinjoin_loader, backup_file, wallet_name, /*load_on_start=*/true, status, error, warnings));
-    }
     std::string getWalletDir() override
     {
-        return fs::PathToString(GetWalletDir());
+        return GetWalletDir().string();
     }
     std::vector<std::string> listWalletDir() override
     {
         std::vector<std::string> paths;
         for (auto& path : ListDatabases(GetWalletDir())) {
-            paths.push_back(fs::PathToString(path));
+            paths.push_back(path.string());
         }
         return paths;
     }

@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 The Dash Core developers
+// Copyright (c) 2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,7 +37,7 @@ bool CRangesSet::Add(uint64_t value)
     if (next != ranges.end()) {
         if (next->begin == value + 1) {
             new_range.end = next->end;
-            ranges.erase(next);
+            it = ranges.erase(next);
         }
     }
     const auto ret = ranges.insert(new_range);

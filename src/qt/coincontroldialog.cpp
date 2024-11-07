@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Copyright (c) 2011-2019 The Bitcoin Core developers
 // Copyright (c) 2014-2024 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -62,16 +62,32 @@ CoinControlDialog::CoinControlDialog(CCoinControl& coin_control, WalletModel* _m
 
     GUIUtil::disableMacFocusRect(this);
 
+    // context menu actions
+    QAction *copyAddressAction = new QAction(tr("Copy address"), this);
+    QAction *copyLabelAction = new QAction(tr("Copy label"), this);
+    QAction *copyAmountAction = new QAction(tr("Copy amount"), this);
+             copyTransactionHashAction = new QAction(tr("Copy transaction ID"), this);  // we need to enable/disable this
+             lockAction = new QAction(tr("Lock unspent"), this);                        // we need to enable/disable this
+             unlockAction = new QAction(tr("Unlock unspent"), this);                    // we need to enable/disable this
+
     // context menu
     contextMenu = new QMenu(this);
-    contextMenu->addAction(tr("&Copy address"), this, &CoinControlDialog::copyAddress);
-    contextMenu->addAction(tr("Copy &label"), this, &CoinControlDialog::copyLabel);
-    contextMenu->addAction(tr("Copy &amount"), this, &CoinControlDialog::copyAmount);
-    m_copy_transaction_outpoint_action = contextMenu->addAction(tr("Copy transaction &ID and output index"), this, &CoinControlDialog::copyTransactionOutpoint);
+    contextMenu->addAction(copyAddressAction);
+    contextMenu->addAction(copyLabelAction);
+    contextMenu->addAction(copyAmountAction);
+    contextMenu->addAction(copyTransactionHashAction);
     contextMenu->addSeparator();
-    lockAction = contextMenu->addAction(tr("L&ock unspent"), this, &CoinControlDialog::lockCoin);
-    unlockAction = contextMenu->addAction(tr("&Unlock unspent"), this, &CoinControlDialog::unlockCoin);
+    contextMenu->addAction(lockAction);
+    contextMenu->addAction(unlockAction);
+
+    // context menu signals
     connect(ui->treeWidget, &QWidget::customContextMenuRequested, this, &CoinControlDialog::showMenu);
+    connect(copyAddressAction, &QAction::triggered, this, &CoinControlDialog::copyAddress);
+    connect(copyLabelAction, &QAction::triggered, this, &CoinControlDialog::copyLabel);
+    connect(copyAmountAction, &QAction::triggered, this, &CoinControlDialog::copyAmount);
+    connect(copyTransactionHashAction, &QAction::triggered, this, &CoinControlDialog::copyTransactionHash);
+    connect(lockAction, &QAction::triggered, this, &CoinControlDialog::lockCoin);
+    connect(unlockAction, &QAction::triggered, this, &CoinControlDialog::unlockCoin);
 
     // clipboard actions
     QAction *clipboardQuantityAction = new QAction(tr("Copy quantity"), this);
@@ -235,7 +251,7 @@ void CoinControlDialog::showMenu(const QPoint &point)
         // disable some items (like Copy Transaction ID, lock, unlock) for tree roots in context menu
         if (item->data(COLUMN_ADDRESS, TxHashRole).toString().length() == 64) // transaction hash is 64 characters (this means it is a child node, so it is not a parent node in tree mode)
         {
-            m_copy_transaction_outpoint_action->setEnabled(true);
+            copyTransactionHashAction->setEnabled(true);
             if (model->wallet().isLockedCoin(COutPoint(uint256S(item->data(COLUMN_ADDRESS, TxHashRole).toString().toStdString()), item->data(COLUMN_ADDRESS, VOutRole).toUInt())))
             {
                 lockAction->setEnabled(false);
@@ -249,7 +265,7 @@ void CoinControlDialog::showMenu(const QPoint &point)
         }
         else // this means click on parent node in tree mode -> disable all
         {
-            m_copy_transaction_outpoint_action->setEnabled(false);
+            copyTransactionHashAction->setEnabled(false);
             lockAction->setEnabled(false);
             unlockAction->setEnabled(false);
         }
@@ -283,14 +299,10 @@ void CoinControlDialog::copyAddress()
         GUIUtil::setClipboard(contextMenuItem->text(COLUMN_ADDRESS));
 }
 
-// context menu action: copy transaction id and vout index
-void CoinControlDialog::copyTransactionOutpoint()
+// context menu action: copy transaction id
+void CoinControlDialog::copyTransactionHash()
 {
-    const QString address = contextMenuItem->data(COLUMN_ADDRESS, TxHashRole).toString();
-    const QString vout = contextMenuItem->data(COLUMN_ADDRESS, VOutRole).toString();
-    const QString outpoint = QString("%1:%2").arg(address).arg(vout);
-
-    GUIUtil::setClipboard(outpoint);
+    GUIUtil::setClipboard(contextMenuItem->data(COLUMN_ADDRESS, TxHashRole).toString());
 }
 
 // context menu action: lock coin
@@ -563,7 +575,7 @@ void CoinControlDialog::updateLabels(CCoinControl& m_coin_control, WalletModel *
     }
 
     // actually update labels
-    int nDisplayUnit = BitcoinUnits::DASH;
+    int nDisplayUnit = BitcoinUnits::GRYPHONMOON;
     if (model->getOptionsModel())
         nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
 
@@ -606,7 +618,7 @@ void CoinControlDialog::updateLabels(CCoinControl& m_coin_control, WalletModel *
     // how many satoshis the estimated fee can vary per byte we guess wrong
     double dFeeVary = (nBytes != 0) ? (double)nPayFee / nBytes : 0;
 
-    QString toolTip4 = tr("Can vary +/- %1 duff(s) per input.").arg(dFeeVary);
+    QString toolTip4 = tr("Can vary +/- %1 muff(s) per input.").arg(dFeeVary);
 
     l3->setToolTip(toolTip4);
     l4->setToolTip(toolTip4);
@@ -737,7 +749,7 @@ void CoinControlDialog::updateView()
             if (ExtractDestination(out.txout.scriptPubKey, outputAddress)) {
                 sAddress = QString::fromStdString(EncodeDestination(outputAddress));
 
-                // if listMode or change => show dash address. In tree mode, address is not shown again for direct wallet address outputs
+                // if listMode or change => show gryphonmoon address. In tree mode, address is not shown again for direct wallet address outputs
                 if (!treeMode || (!(sAddress == sWalletAddress))) {
                     itemOutput->setText(COLUMN_ADDRESS, sAddress);
                 }

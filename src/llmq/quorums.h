@@ -13,38 +13,25 @@
 
 #include <bls/bls.h>
 #include <bls/bls_worker.h>
-#include <protocol.h>
 
+#include <evo/evodb.h>
+#include <net_types.h>
 #include <gsl/pointers.h>
 
 #include <atomic>
 #include <map>
-#include <utility>
 
-class CActiveMasternodeManager;
 class CBlockIndex;
 class CChainState;
 class CConnman;
-class CDataStream;
 class CDeterministicMN;
-class CDeterministicMNManager;
-class CDBWrapper;
-class CEvoDB;
 class CMasternodeSync;
 class CNode;
-class CSporkManager;
 
 using CDeterministicMNCPtr = std::shared_ptr<const CDeterministicMN>;
 
 namespace llmq
 {
-enum class VerifyRecSigStatus
-{
-    NoQuorum,
-    Invalid,
-    Valid,
-};
-
 class CDKGSessionManager;
 class CQuorumBlockProcessor;
 
@@ -94,7 +81,7 @@ public:
     };
 
 private:
-    Consensus::LLMQType llmqType{Consensus::LLMQType::LLMQ_NONE};
+    Consensus::LLMQType llmqType{Consensus::LLMQ_NONE};
     uint256 quorumHash;
     uint16_t nDataMask{0};
     uint256 proTxHash;
@@ -192,10 +179,10 @@ private:
     mutable CBLSWorkerCache blsCache;
     mutable std::atomic<bool> fQuorumDataRecoveryThreadRunning{false};
 
-    mutable Mutex cs_vvec_shShare;
+    mutable RecursiveMutex cs;
     // These are only valid when we either participated in the DKG or fully watched it
-    BLSVerificationVectorPtr quorumVvec GUARDED_BY(cs_vvec_shShare);
-    CBLSSecretKey skShare GUARDED_BY(cs_vvec_shShare);
+    BLSVerificationVectorPtr quorumVvec GUARDED_BY(cs);
+    CBLSSecretKey skShare GUARDED_BY(cs);
 
 public:
     CQuorum(const Consensus::LLMQParams& _params, CBLSWorker& _blsWorker);
@@ -203,13 +190,9 @@ public:
     void Init(CFinalCommitmentPtr _qc, const CBlockIndex* _pQuorumBaseBlockIndex, const uint256& _minedBlockHash, Span<CDeterministicMNCPtr> _members);
 
     bool SetVerificationVector(const std::vector<CBLSPublicKey>& quorumVecIn);
-    void SetVerificationVector(BLSVerificationVectorPtr vvec_in) {
-        LOCK(cs_vvec_shShare);
-        quorumVvec = std::move(vvec_in);
-    }
-    bool SetSecretKeyShare(const CBLSSecretKey& secretKeyShare, const CActiveMasternodeManager& mn_activeman);
+    bool SetSecretKeyShare(const CBLSSecretKey& secretKeyShare);
 
-    bool HasVerificationVector() const LOCKS_EXCLUDED(cs_vvec_shShare);
+    bool HasVerificationVector() const;
     bool IsMember(const uint256& proTxHash) const;
     bool IsValidMember(const uint256& proTxHash) const;
     int GetMemberIndex(const uint256& proTxHash) const;
@@ -218,9 +201,8 @@ public:
     CBLSSecretKey GetSkShare() const;
 
 private:
-    bool HasVerificationVectorInternal() const EXCLUSIVE_LOCKS_REQUIRED(cs_vvec_shShare);
-    void WriteContributions(CDBWrapper& db) const;
-    bool ReadContributions(const CDBWrapper& db);
+    void WriteContributions(CEvoDB& evoDb) const;
+    bool ReadContributions(CEvoDB& evoDb);
 };
 
 /**
@@ -232,22 +214,17 @@ private:
 class CQuorumManager
 {
 private:
-    mutable Mutex cs_db;
-    std::unique_ptr<CDBWrapper> db GUARDED_BY(cs_db){nullptr};
-
     CBLSWorker& blsWorker;
     CChainState& m_chainstate;
     CConnman& connman;
-    CDeterministicMNManager& m_dmnman;
     CDKGSessionManager& dkgManager;
+    CEvoDB& m_evoDb;
     CQuorumBlockProcessor& quorumBlockProcessor;
-    const CActiveMasternodeManager* const m_mn_activeman;
-    const CMasternodeSync& m_mn_sync;
-    const CSporkManager& m_sporkman;
+    const std::unique_ptr<CMasternodeSync>& m_mn_sync;
 
-    mutable Mutex cs_map_quorums;
+    mutable RecursiveMutex cs_map_quorums;
     mutable std::map<Consensus::LLMQType, unordered_lru_cache<uint256, CQuorumPtr, StaticSaltedHasher>> mapQuorumsCache GUARDED_BY(cs_map_quorums);
-    mutable Mutex cs_scan_quorums;
+    mutable RecursiveMutex cs_scan_quorums;
     mutable std::map<Consensus::LLMQType, unordered_lru_cache<uint256, std::vector<CQuorumCPtr>, StaticSaltedHasher>> scanQuorumsCache GUARDED_BY(cs_scan_quorums);
     mutable Mutex cs_cleanup;
     mutable std::map<Consensus::LLMQType, unordered_lru_cache<uint256, uint256, StaticSaltedHasher>> cleanupQuorumsCache GUARDED_BY(cs_cleanup);
@@ -256,11 +233,9 @@ private:
     mutable CThreadInterrupt quorumThreadInterrupt;
 
 public:
-    CQuorumManager(CBLSWorker& _blsWorker, CChainState& chainstate, CConnman& _connman, CDeterministicMNManager& dmnman,
-                   CDKGSessionManager& _dkgManager, CEvoDB& _evoDb, CQuorumBlockProcessor& _quorumBlockProcessor,
-                   const CActiveMasternodeManager* const mn_activeman, const CMasternodeSync& mn_sync,
-                   const CSporkManager& sporkman, bool unit_tests, bool wipe);
-    ~CQuorumManager();
+    CQuorumManager(CBLSWorker& _blsWorker, CChainState& chainstate, CConnman& _connman, CDKGSessionManager& _dkgManager,
+                   CEvoDB& _evoDb, CQuorumBlockProcessor& _quorumBlockProcessor, const std::unique_ptr<CMasternodeSync>& mn_sync);
+    ~CQuorumManager() { Stop(); };
 
     void Start();
     void Stop();
@@ -299,21 +274,20 @@ private:
     void StartQuorumDataRecoveryThread(const CQuorumCPtr pQuorum, const CBlockIndex* pIndex, uint16_t nDataMask) const;
 
     void StartCleanupOldQuorumDataThread(const CBlockIndex* pIndex) const;
-    void MigrateOldQuorumDB(CEvoDB& evoDb) const;
 };
+
+extern std::unique_ptr<CQuorumManager> quorumManager;
 
 // when selecting a quorum for signing and verification, we use CQuorumManager::SelectQuorum with this offset as
 // starting height for scanning. This is because otherwise the resulting signatures would not be verifiable by nodes
 // which are not 100% at the chain tip.
 static constexpr int SIGN_HEIGHT_OFFSET{8};
 
-CQuorumCPtr SelectQuorumForSigning(const Consensus::LLMQParams& llmq_params, const CChain& active_chain, const CQuorumManager& qman,
-                                   const uint256& selectionHash, int signHeight = -1 /*chain tip*/, int signOffset = SIGN_HEIGHT_OFFSET);
+CQuorumCPtr SelectQuorumForSigning(const Consensus::LLMQParams& llmq_params, const CQuorumManager& quorum_manager, const uint256& selectionHash, int signHeight = -1 /*chain tip*/, int signOffset = SIGN_HEIGHT_OFFSET);
 
 // Verifies a recovered sig that was signed while the chain tip was at signedAtTip
-VerifyRecSigStatus VerifyRecoveredSig(Consensus::LLMQType llmqType, const CChain& active_chain, const CQuorumManager& qman,
-                                      int signedAtHeight, const uint256& id, const uint256& msgHash, const CBLSSignature& sig,
-                                      int signOffset = SIGN_HEIGHT_OFFSET);
+bool VerifyRecoveredSig(Consensus::LLMQType llmqType, const CQuorumManager& quorum_manager, int signedAtHeight, const uint256& id, const uint256& msgHash, const CBLSSignature& sig, int signOffset = SIGN_HEIGHT_OFFSET);
+
 } // namespace llmq
 
 template<typename T> struct SaltedHasherImpl;
@@ -323,10 +297,10 @@ struct SaltedHasherImpl<llmq::CQuorumDataRequestKey>
     static std::size_t CalcHash(const llmq::CQuorumDataRequestKey& v, uint64_t k0, uint64_t k1)
     {
         CSipHasher c(k0, k1);
-        c.Write(reinterpret_cast<const unsigned char*>(&v.proRegTx), sizeof(v.proRegTx));
-        c.Write(reinterpret_cast<const unsigned char*>(&v.m_we_requested), sizeof(v.m_we_requested));
-        c.Write(reinterpret_cast<const unsigned char*>(&v.quorumHash), sizeof(v.quorumHash));
-        c.Write(reinterpret_cast<const unsigned char*>(&v.llmqType), sizeof(v.llmqType));
+        c.Write((unsigned char*)&(v.proRegTx), sizeof(v.proRegTx));
+        c.Write((unsigned char*)&(v.m_we_requested), sizeof(v.m_we_requested));
+        c.Write((unsigned char*)&(v.quorumHash), sizeof(v.quorumHash));
+        c.Write((unsigned char*)&(v.llmqType), sizeof(v.llmqType));
         return c.Finalize();
     }
 };

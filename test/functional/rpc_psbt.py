@@ -6,12 +6,10 @@
 """
 
 from decimal import Decimal
-from itertools import product
-
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
-    assert_approx,
     assert_equal,
+    assert_greater_than,
     assert_raises_rpc_error,
     find_output
 )
@@ -30,18 +28,8 @@ class PSBTTest(BitcoinTestFramework):
         self.skip_if_no_wallet()
 
     def run_test(self):
-        # Create and fund a raw tx for sending 10 DASH
+        # Create and fund a raw tx for sending 10 GRYPHONMOON
         psbtx1 = self.nodes[0].walletcreatefundedpsbt([], {self.nodes[2].getnewaddress():10})['psbt']
-
-        # If inputs are specified, do not automatically add more:
-        utxo1 = self.nodes[0].listunspent()[0]
-        assert_raises_rpc_error(-4, "Insufficient funds", self.nodes[0].walletcreatefundedpsbt, [{"txid": utxo1['txid'], "vout": utxo1['vout']}], {self.nodes[2].getnewaddress():900})
-
-        psbtx1 = self.nodes[0].walletcreatefundedpsbt([{"txid": utxo1['txid'], "vout": utxo1['vout']}], {self.nodes[2].getnewaddress():900}, 0, {"add_inputs": True})['psbt']
-        assert_equal(len(self.nodes[0].decodepsbt(psbtx1)['tx']['vin']), 2)
-
-        # Inputs argument can be null
-        self.nodes[0].walletcreatefundedpsbt(None, {self.nodes[2].getnewaddress():10})
 
         # Node 1 should not be able to add anything to it but still return the psbtx same as before
         psbtx = self.nodes[1].walletprocesspsbt(psbtx1)['psbt']
@@ -61,45 +49,33 @@ class PSBTTest(BitcoinTestFramework):
         # Locks are ignored for manually selected inputs
         self.nodes[0].walletcreatefundedpsbt([{"txid": utxo1['txid'], "vout": utxo1['vout']}], {self.nodes[2].getnewaddress():1}, 0)
 
-        # Get pubkeys
+        # Create p2sh and p2pkh addresses
         pubkey0 = self.nodes[0].getaddressinfo(self.nodes[0].getnewaddress())['pubkey']
         pubkey1 = self.nodes[1].getaddressinfo(self.nodes[1].getnewaddress())['pubkey']
         pubkey2 = self.nodes[2].getaddressinfo(self.nodes[2].getnewaddress())['pubkey']
-
-        # Setup watchonly wallets
-        self.nodes[2].createwallet(wallet_name='wmulti', disable_private_keys=True)
-        wmulti = self.nodes[2].get_wallet_rpc('wmulti')
-
-        # Create all the addresses
-        p2sh = wmulti.addmultisigaddress(2, [pubkey0, pubkey1, pubkey2])['address']
-
-        if not self.options.descriptors:
-            wmulti.importaddress(p2sh)
-
+        p2sh = self.nodes[1].addmultisigaddress(2, [pubkey0, pubkey1, pubkey2])['address']
         p2pkh = self.nodes[1].getnewaddress()
 
         # fund those addresses
         rawtx = self.nodes[0].createrawtransaction([], {p2sh:10, p2pkh:10})
-        rawtx = self.nodes[0].fundrawtransaction(rawtx, {"changePosition":1})
+        rawtx = self.nodes[0].fundrawtransaction(rawtx, {"changePosition":2})
         signed_tx = self.nodes[0].signrawtransactionwithwallet(rawtx['hex'])['hex']
         txid = self.nodes[0].sendrawtransaction(signed_tx)
-        self.generate(self.nodes[0], 6)
+        self.nodes[0].generate(6)
+        self.sync_all()
 
         # Find the output pos
         p2sh_pos = -1
         p2pkh_pos = -1
         decoded = self.nodes[0].decoderawtransaction(signed_tx)
         for out in decoded['vout']:
-            if out['scriptPubKey']['address'] == p2sh:
+            if out['scriptPubKey']['addresses'][0] == p2sh:
                 p2sh_pos = out['n']
-            elif out['scriptPubKey']['address'] == p2pkh:
+            elif out['scriptPubKey']['addresses'][0] == p2pkh:
                 p2pkh_pos = out['n']
 
-        inputs = [{"txid":txid,"vout":p2pkh_pos}]
-        outputs = [{self.nodes[1].getnewaddress(): 9.99}]
-
         # spend single key from node 1
-        created_psbt = self.nodes[1].walletcreatefundedpsbt(inputs, outputs)
+        created_psbt = self.nodes[1].walletcreatefundedpsbt([{"txid":txid,"vout":p2pkh_pos}], {self.nodes[1].getnewaddress():9.99})
         walletprocesspsbt_out = self.nodes[1].walletprocesspsbt(created_psbt['psbt'])
         # Make sure it has both types of UTXOs
         decoded = self.nodes[1].decodepsbt(walletprocesspsbt_out['psbt'])
@@ -109,91 +85,23 @@ class PSBTTest(BitcoinTestFramework):
         assert_equal(walletprocesspsbt_out['complete'], True)
         self.nodes[1].sendrawtransaction(self.nodes[1].finalizepsbt(walletprocesspsbt_out['psbt'])['hex'])
 
-        self.log.info("Test walletcreatefundedpsbt fee rate of 10000 sat/vB and 0.1 BTC/kvB produces a total fee at or slightly below -maxtxfee (~0.05290000)")
-        res1 = self.nodes[1].walletcreatefundedpsbt(inputs, outputs, 0, {"fee_rate": 10000, "add_inputs": True})
-        assert_approx(res1["fee"], 0.04, 0.005)
-        res2 = self.nodes[1].walletcreatefundedpsbt(inputs, outputs, 0, {"feeRate": "0.1", "add_inputs": True})
-        assert_approx(res2["fee"], 0.04, 0.005)
+        # feeRate of 0.1 GRYPHONMOON / KB produces a total fee slightly below -maxtxfee (~0.06650000):
+        res = self.nodes[1].walletcreatefundedpsbt([{"txid":txid,"vout":p2pkh_pos},{"txid":txid,"vout":p2sh_pos},{"txid":txid,"vout":p2pkh_pos}], {self.nodes[1].getnewaddress():29.99}, 0, {"feeRate": 0.1}, False)
+        assert_greater_than(res["fee"], 0.06)
+        assert_greater_than(0.07, res["fee"])
+        decoded_psbt = self.nodes[0].decodepsbt(res['psbt'])
+        for psbt_in in decoded_psbt["inputs"]:
+            assert "bip32_derivs" not in psbt_in
 
-        self.log.info("Test min fee rate checks with walletcreatefundedpsbt are bypassed, e.g. a fee_rate under 1 sat/vB is allowed")
-        res3 = self.nodes[1].walletcreatefundedpsbt(inputs, outputs, 0, {"fee_rate": "0.999", "add_inputs": True})
-        assert_approx(res3["fee"], 0.00000224, 0.0000001)
-        res4 = self.nodes[1].walletcreatefundedpsbt(inputs, outputs, 0, {"feeRate": 0.00000999, "add_inputs": True})
-        assert_approx(res4["fee"], 0.00000224, 0.0000001)
-
-        self.log.info("Test min fee rate checks with walletcreatefundedpsbt are bypassed and that funding non-standard 'zero-fee' transactions is valid")
-        for param, zero_value in product(["fee_rate", "feeRate"], [0, 0.000, 0.00000000, "0", "0.000", "0.00000000"]):
-            assert_equal(0, self.nodes[1].walletcreatefundedpsbt(inputs, outputs, 0, {param: zero_value, "add_inputs": True})["fee"])
-
-        self.log.info("Test invalid fee rate settings")
-        for param, value in {("fee_rate", 100000), ("feeRate", 1)}:
-            assert_raises_rpc_error(-4, "Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)",
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {param: value, "add_inputs": True})
-            assert_raises_rpc_error(-3, "Amount out of range",
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {param: -1, "add_inputs": True})
-            assert_raises_rpc_error(-3, "Amount is not a number or string",
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {param: {"foo": "bar"}, "add_inputs": True})
-            # Test fee rate values that don't pass fixed-point parsing checks.
-            for invalid_value in ["", 0.000000001, 1e-09, 1.111111111, 1111111111111111, "31.999999999999999999999"]:
-                assert_raises_rpc_error(-3, "Invalid amount",
-                    self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {param: invalid_value, "add_inputs": True})
-        # Test fee_rate values that cannot be represented in sat/vB.
-        for invalid_value in [0.0001, 0.00000001, 0.00099999, 31.99999999, "0.0001", "0.00000001", "0.00099999", "31.99999999"]:
-            assert_raises_rpc_error(-3, "Invalid amount",
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"fee_rate": invalid_value, "add_inputs": True})
-
-        self.log.info("- raises RPC error if both feeRate and fee_rate are passed")
-        assert_raises_rpc_error(-8, "Cannot specify both fee_rate (duff/B) and feeRate (DASH/kB)",
-            self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"fee_rate": 0.1, "feeRate": 0.1, "add_inputs": True})
-
-        self.log.info("- raises RPC error if both feeRate and estimate_mode passed")
-        assert_raises_rpc_error(-8, "Cannot specify both estimate_mode and feeRate",
-            self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"estimate_mode": "economical", "feeRate": 0.1, "add_inputs": True})
-
-        for param in ["feeRate", "fee_rate"]:
-            self.log.info("- raises RPC error if both {} and conf_target are passed".format(param))
-            assert_raises_rpc_error(-8, "Cannot specify both conf_target and {}. Please provide either a confirmation "
-                "target in blocks for automatic fee estimation, or an explicit fee rate.".format(param),
-                self.nodes[1].walletcreatefundedpsbt ,inputs, outputs, 0, {param: 1, "conf_target": 1, "add_inputs": True})
-
-        self.log.info("- raises RPC error if both fee_rate and estimate_mode are passed")
-        assert_raises_rpc_error(-8, "Cannot specify both estimate_mode and fee_rate",
-            self.nodes[1].walletcreatefundedpsbt ,inputs, outputs, 0, {"fee_rate": 1, "estimate_mode": "economical", "add_inputs": True})
-
-        self.log.info("- raises RPC error with invalid estimate_mode settings")
-        for k, v in {"number": 42, "object": {"foo": "bar"}}.items():
-            assert_raises_rpc_error(-3, "Expected type string for estimate_mode, got {}".format(k),
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"estimate_mode": v, "conf_target": 0.1, "add_inputs": True})
-        for mode in ["", "foo", Decimal("3.141592")]:
-            assert_raises_rpc_error(-8, 'Invalid estimate_mode parameter, must be one of: "unset", "economical", "conservative"',
-                self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"estimate_mode": mode, "conf_target": 0.1, "add_inputs": True})
-
-        self.log.info("- raises RPC error with invalid conf_target settings")
-        for mode in ["unset", "economical", "conservative"]:
-            self.log.debug("{}".format(mode))
-            for k, v in {"string": "", "object": {"foo": "bar"}}.items():
-                assert_raises_rpc_error(-3, "Expected type number for conf_target, got {}".format(k),
-                    self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"estimate_mode": mode, "conf_target": v, "add_inputs": True})
-            for n in [-1, 0, 1009]:
-                assert_raises_rpc_error(-8, "Invalid conf_target, must be between 1 and 1008",  # max value of 1008 per src/policy/fees.h
-                    self.nodes[1].walletcreatefundedpsbt, inputs, outputs, 0, {"estimate_mode": mode, "conf_target": n, "add_inputs": True})
-
-        self.log.info("Test walletcreatefundedpsbt with too-high fee rate produces total fee well above -maxtxfee and raises RPC error")
+        # feeRate of 10 GRYPHONMOON / KB produces a total fee well above -maxtxfee
         # previously this was silently capped at -maxtxfee
-        for bool_add, outputs_array in {True: outputs, False: [{self.nodes[1].getnewaddress(): 1}]}.items():
-            msg = "Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)"
-            assert_raises_rpc_error(-4, msg, self.nodes[1].walletcreatefundedpsbt, inputs, outputs_array, 0, {"fee_rate": 1000000, "add_inputs": bool_add})
-            assert_raises_rpc_error(-4, msg, self.nodes[1].walletcreatefundedpsbt, inputs, outputs_array, 0, {"feeRate": 1, "add_inputs": bool_add})
+        assert_raises_rpc_error(-4, "Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)", self.nodes[1].walletcreatefundedpsbt, [{"txid":txid,"vout":p2pkh_pos},{"txid":txid,"vout":p2sh_pos},{"txid":txid,"vout":p2pkh_pos}], {self.nodes[1].getnewaddress():29.99}, 0, {"feeRate": 10})
 
-        self.log.info("Test various PSBT operations")
         # partially sign multisig things with node 1
-        psbtx = wmulti.walletcreatefundedpsbt(inputs=[{"txid":txid,"vout":p2sh_pos}], outputs={self.nodes[1].getnewaddress():9.99}, options={'changeAddress': self.nodes[1].getrawchangeaddress()})['psbt']
+        psbtx = self.nodes[1].walletcreatefundedpsbt([{"txid":txid,"vout":p2sh_pos}], {self.nodes[1].getnewaddress():9.99})['psbt']
         walletprocesspsbt_out = self.nodes[1].walletprocesspsbt(psbtx)
         psbtx = walletprocesspsbt_out['psbt']
         assert_equal(walletprocesspsbt_out['complete'], False)
-
-        # Unload wmulti, we don't need it anymore
-        wmulti.unloadwallet()
 
         # partially sign with node 2. This should be complete and sendable
         walletprocesspsbt_out = self.nodes[2].walletprocesspsbt(psbtx)
@@ -226,7 +134,8 @@ class PSBTTest(BitcoinTestFramework):
         node2_addr = self.nodes[2].getnewaddress()
         txid1 = self.nodes[0].sendtoaddress(node1_addr, 13)
         txid2 = self.nodes[0].sendtoaddress(node2_addr, 13)
-        blockhash = self.generate(self.nodes[0], 6)[0]
+        blockhash = self.nodes[0].generate(6)[0]
+        self.sync_all()
         vout1 = find_output(self.nodes[1], txid1, 13, blockhash=blockhash)
         vout2 = find_output(self.nodes[2], txid2, 13, blockhash=blockhash)
 
@@ -253,7 +162,8 @@ class PSBTTest(BitcoinTestFramework):
         combined = self.nodes[0].combinepsbt([psbt1, psbt2])
         finalized = self.nodes[0].finalizepsbt(combined)['hex']
         self.nodes[0].sendrawtransaction(finalized)
-        self.generate(self.nodes[0], 6)
+        self.nodes[0].generate(6)
+        self.sync_all()
 
         # Make sure change address wallet does not have P2SH innerscript access to results in success
         # when attempting BnB coin selection
@@ -262,20 +172,12 @@ class PSBTTest(BitcoinTestFramework):
 
         # Regression test for 14473 (mishandling of already-signed witness transaction):
         unspent = self.nodes[0].listunspent()[0]
-        psbtx_info = self.nodes[0].walletcreatefundedpsbt([{"txid":unspent["txid"], "vout":unspent["vout"]}], [{self.nodes[2].getnewaddress():unspent["amount"]+1}], 0, {"add_inputs": True})
+        psbtx_info = self.nodes[0].walletcreatefundedpsbt([{"txid":unspent["txid"], "vout":unspent["vout"]}], [{self.nodes[2].getnewaddress():unspent["amount"]+1}])
         complete_psbt = self.nodes[0].walletprocesspsbt(psbtx_info["psbt"])
         double_processed_psbt = self.nodes[0].walletprocesspsbt(complete_psbt["psbt"])
         assert_equal(complete_psbt, double_processed_psbt)
         # We don't care about the decode result, but decoding must succeed.
         self.nodes[0].decodepsbt(double_processed_psbt["psbt"])
-
-        # Make sure unsafe inputs are included if specified
-        self.nodes[2].createwallet(wallet_name="unsafe")
-        wunsafe = self.nodes[2].get_wallet_rpc("unsafe")
-        self.nodes[0].sendtoaddress(wunsafe.getnewaddress(), 2)
-        self.sync_mempools()
-        assert_raises_rpc_error(-4, "Insufficient funds", wunsafe.walletcreatefundedpsbt, [], [{self.nodes[0].getnewaddress(): 1}])
-        wunsafe.walletcreatefundedpsbt([], [{self.nodes[0].getnewaddress(): 1}], 0, {"include_unsafe": True})
 
         # BIP 174 Test Vectors
 
@@ -310,7 +212,7 @@ class PSBTTest(BitcoinTestFramework):
 
         # Signer tests
         for i, signer in enumerate(signers):
-            self.nodes[2].createwallet(wallet_name="wallet{}".format(i))
+            self.nodes[2].createwallet("wallet{}".format(i))
             wrpc = self.nodes[2].get_wallet_rpc("wallet{}".format(i))
             for key in signer['privkeys']:
                 wrpc.importprivkey(key)
@@ -391,7 +293,8 @@ class PSBTTest(BitcoinTestFramework):
         addr4 = self.nodes[1].getnewaddress()
         txid4 = self.nodes[0].sendtoaddress(addr4, 5)
         vout4 = find_output(self.nodes[0], txid4, 5)
-        self.generate(self.nodes[0], 6)
+        self.nodes[0].generate(6)
+        self.sync_all()
         psbt2 = self.nodes[1].createpsbt([{"txid":txid4, "vout":vout4}], {self.nodes[0].getnewaddress():Decimal('4.999')})
         psbt2 = self.nodes[1].walletprocesspsbt(psbt2)['psbt']
         psbt2_decoded = self.nodes[0].decodepsbt(psbt2)
@@ -403,7 +306,8 @@ class PSBTTest(BitcoinTestFramework):
         # Newly created PSBT needs UTXOs and updating
         addr = self.nodes[1].getnewaddress()
         txid = self.nodes[0].sendtoaddress(addr, 7)
-        self.generate(self.nodes[0], 6)
+        self.nodes[0].generate(6)
+        self.sync_all()
         vout = find_output(self.nodes[0], txid, 7)
         psbt = self.nodes[1].createpsbt([{"txid":txid, "vout":vout}], {self.nodes[0].getnewaddress():Decimal('6.999')})
         analyzed = self.nodes[0].analyzepsbt(psbt)

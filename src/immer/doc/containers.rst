@@ -48,10 +48,3 @@ map
 .. doxygenclass:: immer::map
     :members:
     :undoc-members:
-
-table
------
-
-.. doxygenclass:: immer::table
-    :members:
-    :undoc-members:

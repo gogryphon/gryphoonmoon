@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,7 +25,6 @@ template<typename T>
 class CFlatDB;
 class CNode;
 class CDataStream;
-class PeerManager;
 
 class CSporkMessage;
 class CSporkManager;
@@ -42,7 +41,7 @@ enum SporkId : int32_t {
     SPORK_19_CHAINLOCKS_ENABLED                            = 10018,
     SPORK_21_QUORUM_ALL_CONNECTED                          = 10020,
     SPORK_23_QUORUM_POSE                                   = 10022,
-    // SPORK_24_DEPRECATED = 10023,
+    SPORK_24_TEST_EHF                                      = 10023,
 
     SPORK_INVALID                                          = -1,
 };
@@ -68,7 +67,7 @@ struct CSporkDef
 };
 
 #define MAKE_SPORK_DEF(name, defaultValue) CSporkDef{name, defaultValue, #name}
-[[maybe_unused]] static constexpr std::array<CSporkDef, 7> sporkDefs = {
+[[maybe_unused]] static constexpr std::array<CSporkDef, 8> sporkDefs = {
     MAKE_SPORK_DEF(SPORK_2_INSTANTSEND_ENABLED,            4070908800ULL), // OFF
     MAKE_SPORK_DEF(SPORK_3_INSTANTSEND_BLOCK_FILTERING,    4070908800ULL), // OFF
     MAKE_SPORK_DEF(SPORK_9_SUPERBLOCKS_ENABLED,            4070908800ULL), // OFF
@@ -76,8 +75,10 @@ struct CSporkDef
     MAKE_SPORK_DEF(SPORK_19_CHAINLOCKS_ENABLED,            4070908800ULL), // OFF
     MAKE_SPORK_DEF(SPORK_21_QUORUM_ALL_CONNECTED,          4070908800ULL), // OFF
     MAKE_SPORK_DEF(SPORK_23_QUORUM_POSE,                   4070908800ULL), // OFF
+    MAKE_SPORK_DEF(SPORK_24_TEST_EHF,                      4070908800ULL), // OFF
 };
 #undef MAKE_SPORK_DEF
+extern std::unique_ptr<CSporkManager> sporkManager;
 
 /**
  * Sporks are network parameters used primarily to prevent forking and turn
@@ -155,7 +156,7 @@ public:
     /**
      * Relay is used to send this spork message to other peers.
      */
-    void Relay(PeerManager& peerman) const;
+    void Relay(CConnman& connman) const;
 };
 
 class SporkStore
@@ -170,18 +171,18 @@ protected:
 
 public:
     template<typename Stream>
-    void Serialize(Stream &s) const EXCLUSIVE_LOCKS_REQUIRED(!cs)
+    void Serialize(Stream &s) const LOCKS_EXCLUDED(cs)
     {
         // We don't serialize pubkey ids because pubkeys should be
         // hardcoded or be set with cmdline or options, should
-        // not reuse pubkeys from previous dashd run.
+        // not reuse pubkeys from previous gryphonmoond run.
         // We don't serialize private key to prevent its leakage.
         LOCK(cs);
         s << SERIALIZATION_VERSION_STRING << mapSporksByHash << mapSporksActive;
     }
 
     template<typename Stream>
-    void Unserialize(Stream &s) EXCLUSIVE_LOCKS_REQUIRED(!cs)
+    void Unserialize(Stream &s) LOCKS_EXCLUDED(cs)
     {
         LOCK(cs);
         std::string strVersion;
@@ -198,12 +199,12 @@ public:
      *
      * This method was introduced along with the spork cache.
      */
-    void Clear() EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void Clear() LOCKS_EXCLUDED(cs);
 
     /**
      * ToString returns the string representation of the SporkManager.
      */
-    std::string ToString() const EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    std::string ToString() const LOCKS_EXCLUDED(cs);
 };
 
 /**
@@ -252,12 +253,12 @@ public:
      *
      * This method was introduced along with the spork cache.
      */
-    void CheckAndRemove() EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void CheckAndRemove() LOCKS_EXCLUDED(cs);
 
     /**
      * ProcessMessage is used to call ProcessSpork and ProcessGetSporks. See below
      */
-    PeerMsgRet ProcessMessage(CNode& peer, CConnman& connman, PeerManager& peerman, std::string_view msg_type, CDataStream& vRecv);
+    PeerMsgRet ProcessMessage(CNode& peer, CConnman& connman, std::string_view msg_type, CDataStream& vRecv);
 
     /**
      * ProcessSpork is used to handle the 'spork' p2p message.
@@ -265,20 +266,20 @@ public:
      * For 'spork', it validates the spork and adds it to the internal spork storage and
      * performs any necessary processing.
      */
-    PeerMsgRet ProcessSpork(const CNode& peer, PeerManager& peerman, CDataStream& vRecv) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    PeerMsgRet ProcessSpork(const CNode& peer, CConnman& connman, CDataStream& vRecv) LOCKS_EXCLUDED(cs);
 
     /**
      * ProcessGetSporks is used to handle the 'getsporks' p2p message.
      *
      * For 'getsporks', it sends active sporks to the requesting peer.
      */
-    void ProcessGetSporks(CNode& peer, CConnman& connman) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    void ProcessGetSporks(CNode& peer, CConnman& connman) LOCKS_EXCLUDED(cs);
 
     /**
      * UpdateSpork is used by the spork RPC command to set a new spork value, sign
      * and broadcast the spork message.
      */
-    bool UpdateSpork(PeerManager& peerman, SporkId nSporkID, SporkValue nValue) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool UpdateSpork(SporkId nSporkID, SporkValue nValue, CConnman& connman) LOCKS_EXCLUDED(cs);
 
     /**
      * IsSporkActive returns a bool for time-based sporks, and should be used
@@ -294,7 +295,7 @@ public:
      * GetSporkValue returns the spork value given a Spork ID. If no active spork
      * message has yet been received by the node, it returns the default value.
      */
-    SporkValue GetSporkValue(SporkId nSporkID) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    SporkValue GetSporkValue(SporkId nSporkID) const LOCKS_EXCLUDED(cs);
 
     /**
      * GetSporkIDByName returns the internal Spork ID given the spork name.
@@ -309,7 +310,7 @@ public:
      * hash-based index of sporks for this reason, and this function is the access
      * point into that index.
      */
-    std::optional<CSporkMessage> GetSporkByHash(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    std::optional<CSporkMessage> GetSporkByHash(const uint256& hash) const LOCKS_EXCLUDED(cs);
 
     /**
      * SetSporkAddress is used to set a public key ID which will be used to
@@ -318,7 +319,7 @@ public:
      * This can be called multiple times to add multiple keys to the set of
      * valid spork signers.
      */
-    bool SetSporkAddress(const std::string& strAddress) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool SetSporkAddress(const std::string& strAddress) LOCKS_EXCLUDED(cs);
 
     /**
      * SetMinSporkKeys is used to set the required spork signer threshold, for
@@ -327,7 +328,7 @@ public:
      * This value must be at least a majority of the total number of spork
      * keys, and for obvious reasons cannot be larger than that number.
      */
-    bool SetMinSporkKeys(int minSporkKeys) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool SetMinSporkKeys(int minSporkKeys) LOCKS_EXCLUDED(cs);
 
     /**
      * SetPrivKey is used to set a spork key to enable setting / signing of
@@ -336,7 +337,7 @@ public:
      * This will return false if the private key does not match any spork
      * address in the set of valid spork signers (see SetSporkAddress).
      */
-    bool SetPrivKey(const std::string& strPrivKey) EXCLUSIVE_LOCKS_REQUIRED(!cs);
+    bool SetPrivKey(const std::string& strPrivKey) LOCKS_EXCLUDED(cs);
 };
 
 #endif // BITCOIN_SPORK_H

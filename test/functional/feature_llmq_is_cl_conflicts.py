@@ -13,10 +13,10 @@ Checks conflict handling between ChainLocks and InstantSend
 import struct
 
 from test_framework.blocktools import create_block_with_mnpayments
-from test_framework.messages import CInv, hash256, msg_clsig, msg_inv, ser_string, tx_from_hex, uint256_from_str
+from test_framework.messages import CInv, CTransaction, FromHex, hash256, msg_clsig, msg_inv, ser_string, ToHex, uint256_from_str
 from test_framework.p2p import P2PInterface
-from test_framework.test_framework import DashTestFramework
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.test_framework import GryphonmoonTestFramework
+from test_framework.util import assert_equal, assert_raises_rpc_error, hex_str_to_bytes, wait_until
 
 
 class TestP2PConn(P2PInterface):
@@ -47,13 +47,15 @@ class TestP2PConn(P2PInterface):
                 self.send_message(self.islocks[inv.hash])
 
 
-class LLMQ_IS_CL_Conflicts(DashTestFramework):
+class LLMQ_IS_CL_Conflicts(GryphonmoonTestFramework):
     def set_test_params(self):
-        self.set_dash_test_params(5, 4, [["-testactivationheight=mn_rr@2000"]] * 5)
-        self.set_dash_llmq_test_params(4, 4)
+        self.set_gryphonmoon_test_params(5, 4, fast_dip3_enforcement=True)
+        self.set_gryphonmoon_llmq_test_params(4, 4)
         self.supports_cli = False
 
     def run_test(self):
+        self.activate_dip8()
+
         self.test_node = self.nodes[0].add_p2p_connection(TestP2PConn())
 
         self.nodes[0].sporkupdate("SPORK_17_QUORUM_DKG_ENABLED", 0)
@@ -71,7 +73,7 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         self.mine_cycle_quorum(llmq_type_name='llmq_test_dip0024', llmq_type=103)
 
         # mine single block, wait for chainlock
-        self.generate(self.nodes[0], 1, sync_fun=self.no_op)
+        self.nodes[0].generate(1)
         self.wait_for_chainlocked_block_all_nodes(self.nodes[0].getbestblockhash())
 
         self.test_chainlock_overrides_islock(False)
@@ -86,11 +88,11 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         # create three raw TXs, they will conflict with each other
         rawtx1 = self.create_raw_tx(self.nodes[0], self.nodes[0], 1, 1, 100)['hex']
         rawtx2 = self.create_raw_tx(self.nodes[0], self.nodes[0], 1, 1, 100)['hex']
-        rawtx1_obj = tx_from_hex(rawtx1)
-        rawtx2_obj = tx_from_hex(rawtx2)
+        rawtx1_obj = FromHex(CTransaction(), rawtx1)
+        rawtx2_obj = FromHex(CTransaction(), rawtx2)
 
         rawtx1_txid = self.nodes[0].sendrawtransaction(rawtx1)
-        rawtx2_txid = hash256(bytes.fromhex(rawtx2))[::-1].hex()
+        rawtx2_txid = hash256(hex_str_to_bytes(rawtx2))[::-1].hex()
 
         # Create a chained TX on top of tx1
         inputs = []
@@ -112,14 +114,15 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         block = create_block_with_mnpayments(self.mninfo, self.nodes[0], [rawtx2_obj])
         if test_block_conflict:
             # The block shouldn't be accepted/connected but it should be known to node 0 now
-            submit_result = self.nodes[0].submitblock(block.serialize().hex())
+            submit_result = self.nodes[0].submitblock(ToHex(block))
             assert submit_result == "conflict-tx-lock"
 
         cl = self.create_chainlock(self.nodes[0].getblockcount() + 1, block)
 
         if mine_confllicting:
+            islock_tip = self.nodes[0].generate(1)[-1]
             # Make sure we won't sent clsig too early
-            islock_tip = self.generate(self.nodes[0], 1, sync_fun=lambda: self.sync_blocks())[-1]
+            self.sync_blocks()
 
         self.test_node.send_clsig(cl)
 
@@ -143,7 +146,7 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
 
         # At this point all nodes should be in sync and have the same "best chainlock"
 
-        submit_result = self.nodes[1].submitblock(block.serialize().hex())
+        submit_result = self.nodes[1].submitblock(ToHex(block))
         if test_block_conflict:
             # Node 1 should receive the block from node 0 and should not accept it again via submitblock
             assert submit_result == "duplicate"
@@ -202,8 +205,8 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         rawtx1 = self.create_raw_tx(self.nodes[0], self.nodes[0], 1, 1, 100)['hex']
         rawtx2 = self.create_raw_tx(self.nodes[0], self.nodes[0], 1, 1, 100)['hex']
 
-        rawtx1_txid = hash256(bytes.fromhex(rawtx1))[::-1].hex()
-        rawtx2_txid = hash256(bytes.fromhex(rawtx2))[::-1].hex()
+        rawtx1_txid = hash256(hex_str_to_bytes(rawtx1))[::-1].hex()
+        rawtx2_txid = hash256(hex_str_to_bytes(rawtx2))[::-1].hex()
 
         # Create an ISLOCK but don't broadcast it yet
         isdlock = self.create_isdlock(rawtx2)
@@ -222,7 +225,8 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
 
         # Mine the conflicting TX into a block
         good_tip = self.nodes[0].getbestblockhash()
-        self.generate(self.nodes[0], 2)
+        self.nodes[0].generate(2)
+        self.sync_all()
 
         # Assert that the conflicting tx got mined and the locked TX is not valid
         assert self.nodes[0].getrawtransaction(rawtx1_txid, True)['confirmations'] > 0
@@ -231,7 +235,7 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         # Create the block and the corresponding clsig but do not relay clsig yet
         cl_block = create_block_with_mnpayments(self.mninfo, self.nodes[0])
         cl = self.create_chainlock(self.nodes[0].getblockcount() + 1, cl_block)
-        self.nodes[0].submitblock(cl_block.serialize().hex())
+        self.nodes[0].submitblock(ToHex(cl_block))
         self.sync_all()
         assert self.nodes[0].getbestblockhash() == cl_block.hash
 
@@ -239,7 +243,7 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         # even though the nodes don't know the locked transaction yet
         self.test_node.send_isdlock(isdlock)
         for node in self.nodes:
-            self.wait_until(lambda: node.getbestblockhash() == good_tip, timeout=10)
+            wait_until(lambda: node.getbestblockhash() == good_tip, timeout=10, sleep=0.5)
             # islock for tx2 is incomplete, tx1 should return in mempool now that blocks are disconnected
             assert rawtx1_txid in set(node.getrawmempool())
 
@@ -253,7 +257,8 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         # Should not allow competing txes now
         assert_raises_rpc_error(-26, "tx-txlock-conflict", self.nodes[0].sendrawtransaction, rawtx1)
 
-        islock_tip = self.generate(self.nodes[0], 1)[0]
+        islock_tip = self.nodes[0].generate(1)[0]
+        self.sync_all()
 
         for node in self.nodes:
             self.wait_for_instantlock(rawtx2_txid, node)
@@ -275,7 +280,7 @@ class LLMQ_IS_CL_Conflicts(DashTestFramework):
         message_hash = block.hash
 
         recSig = self.get_recovered_sig(request_id, message_hash)
-        clsig = msg_clsig(height, block.sha256, bytes.fromhex(recSig['sig']))
+        clsig = msg_clsig(height, block.sha256, hex_str_to_bytes(recSig['sig']))
         return clsig
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2020-2024 The Raptoreum developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +8,7 @@
 #define BITCOIN_CONSENSUS_PARAMS_H
 
 #include <uint256.h>
+#include <devfee_payment.h>
 #include <llmq/params.h>
 
 #include <limits>
@@ -14,12 +16,8 @@
 
 namespace Consensus {
 
-/**
- * A buried deployment is one where the height of the activation has been hardcoded into
- * the client implementation long after the consensus change has activated. See BIP 90.
- */
-enum BuriedDeployment : int16_t {
-    // buried deployments get negative values to avoid overlap with DeploymentPos
+enum BuriedDeployment : int16_t
+{
     DEPLOYMENT_HEIGHTINCB = std::numeric_limits<int16_t>::min(),
     DEPLOYMENT_DERSIG,
     DEPLOYMENT_CLTV,
@@ -32,34 +30,29 @@ enum BuriedDeployment : int16_t {
     DEPLOYMENT_DIP0024,
     DEPLOYMENT_BRR,
     DEPLOYMENT_V19,
-    DEPLOYMENT_V20,
-    DEPLOYMENT_MN_RR,
 };
-constexpr bool ValidDeployment(BuriedDeployment dep) { return dep <= DEPLOYMENT_MN_RR; }
+constexpr bool ValidDeployment(BuriedDeployment dep) { return DEPLOYMENT_HEIGHTINCB <= dep && dep <= DEPLOYMENT_V19; }
 
-enum DeploymentPos : uint16_t {
+enum DeploymentPos : uint16_t
+{
     DEPLOYMENT_TESTDUMMY,
-    DEPLOYMENT_WITHDRAWALS, // Deployment of Fix for quorum selection for withdrawals
+    DEPLOYMENT_V20,     // Deployment of EHF, LLMQ Randomness Beacon
+    DEPLOYMENT_MN_RR,   // Deployment of Masternode Reward Location Reallocation
     // NOTE: Also add new deployments to VersionBitsDeploymentInfo in deploymentinfo.cpp
     MAX_VERSION_BITS_DEPLOYMENTS
 };
-constexpr bool ValidDeployment(DeploymentPos dep) { return dep < MAX_VERSION_BITS_DEPLOYMENTS; }
+constexpr bool ValidDeployment(DeploymentPos dep) { return DEPLOYMENT_TESTDUMMY <= dep && dep <= DEPLOYMENT_MN_RR; }
 
 /**
  * Struct for each individual consensus rule change using BIP9.
  */
 struct BIP9Deployment {
     /** Bit position to select the particular bit in nVersion. */
-    int bit{28};
+    int bit;
     /** Start MedianTime for version bits miner confirmation. Can be a date in the past */
-    int64_t nStartTime{NEVER_ACTIVE};
+    int64_t nStartTime;
     /** Timeout/expiry MedianTime for the deployment attempt. */
-    int64_t nTimeout{NEVER_ACTIVE};
-    /** If lock in occurs, delay activation until at least this block
-     *  height.  Note that activation will only occur on a retarget
-     *  boundary.
-     */
-    int min_activation_height{0};
+    int64_t nTimeout;
     /** The number of past blocks (including the block under consideration) to be taken into account for locking in a fork. */
     int64_t nWindowSize{0};
     /** A starting number of blocks, in the range of 1..nWindowSize, which must signal for a fork in order to lock it in. */
@@ -82,11 +75,6 @@ struct BIP9Deployment {
      *  process (which takes at least 3 BIP9 intervals). Only tests that specifically test the
      *  behaviour during activation cannot use this. */
     static constexpr int64_t ALWAYS_ACTIVE = -1;
-
-    /** Special value for nStartTime indicating that the deployment is never active.
-     *  This is useful for integrating the code changes for a new feature
-     *  prior to deploying it on some or all networks. */
-    static constexpr int64_t NEVER_ACTIVE = -2;
 };
 
 /**
@@ -143,10 +131,6 @@ struct Params {
     int DIP0024QuorumsHeight;
     /** Block height at which V19 (Basic BLS and EvoNodes) becomes active */
     int V19Height;
-    /** Block height at which V20 (Deployment of EHF, LLMQ Randomness Beacon) becomes active */
-    int V20Height;
-    /** Block height at which MN_RR (Deployment of Masternode Reward Location Reallocation) becomes active */
-    int MN_RRHeight;
     /** Don't warn about unknown BIP 9 activations below this height.
      * This prevents us from warning about the CSV and DIP activations. */
     int MinBIP9WarningHeight;
@@ -166,7 +150,6 @@ struct Params {
     bool fPowNoRetargeting;
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;
-    int nPowKGWHeight;
     int nPowDGWHeight;
     int64_t DifficultyAdjustmentInterval() const { return nPowTargetTimespan / nPowTargetSpacing; }
     uint256 nMinimumChainWork;
@@ -177,11 +160,14 @@ struct Params {
     int nHighSubsidyBlocks{0};
     int nHighSubsidyFactor{1};
 
-    std::vector<LLMQParams> llmqs;
+    std::map<LLMQType, LLMQParams> llmqs;
     LLMQType llmqTypeChainLocks;
     LLMQType llmqTypeDIP0024InstantSend{LLMQType::LLMQ_NONE};
     LLMQType llmqTypePlatform{LLMQType::LLMQ_NONE};
     LLMQType llmqTypeMnhf{LLMQType::LLMQ_NONE};
+
+    DevfeePayment nDevfeePayment;
+    DevfeePayment nCommunityPayment;
 
     int DeploymentHeight(BuriedDeployment dep) const
     {
@@ -210,10 +196,6 @@ struct Params {
             return BRRHeight;
         case DEPLOYMENT_V19:
             return V19Height;
-        case DEPLOYMENT_V20:
-            return V20Height;
-        case DEPLOYMENT_MN_RR:
-            return MN_RRHeight;
         } // no default case, so the compiler can warn about missing cases
         return std::numeric_limits<int>::max();
     }

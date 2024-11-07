@@ -130,15 +130,12 @@
         </spacer>
        </item>
        <item>
-        <widget class="QCheckBox" name="showTrayIcon">
+        <widget class="QCheckBox" name="hideTrayIcon">
          <property name="toolTip">
-          <string>Show the icon in the system tray.</string>
+          <string>Hide the icon from the system tray.</string>
          </property>
          <property name="text">
-          <string>&amp;Show tray icon</string>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
+          <string>&amp;Hide tray icon</string>
          </property>
         </widget>
        </item>
@@ -291,22 +288,12 @@
            <property name="sizeHint" stdset="0">
             <size>
              <width>40</width>
-             <height>40</height>
+             <height>20</height>
             </size>
            </property>
           </spacer>
          </item>
         </layout>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="enableServer">
-         <property name="toolTip">
-          <string extracomment="Tooltip text for Options window setting that enables the RPC server.">This allows you or a third party tool to communicate with the node through command-line and JSON-RPC commands.</string>
-         </property>
-         <property name="text">
-          <string extracomment="An Options window setting to enable the RPC server.">Enable R&amp;PC server</string>
-         </property>
-        </widget>
        </item>
        <item>
         <spacer name="verticalSpacer_Main">
@@ -325,16 +312,6 @@
      </widget>
      <widget class="QWidget" name="pageWallet">
       <layout class="QVBoxLayout" name="verticalLayout_Wallet">
-       <item>
-        <widget class="QCheckBox" name="subFeeFromAmount">
-         <property name="toolTip">
-          <string extracomment="Tooltip text for Options window setting that sets subtracting the fee from a sending amount as default.">Whether to set subtract fee from amount as default or not.</string>
-         </property>
-         <property name="text">
-          <string extracomment="An Options window setting to set subtracting the fee from a sending amount as default.">Subtract &amp;fee from amount by default</string>
-         </property>
-        </widget>
-       </item>
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_2">
          <item>
@@ -638,7 +615,7 @@
        <item>
         <widget class="QCheckBox" name="mapPortUpnp">
          <property name="toolTip">
-          <string>Automatically open the Dash Core client port on the router. This only works when your router supports UPnP and it is enabled.</string>
+          <string>Automatically open the Gryphonmoon Core client port on the router. This only works when your router supports UPnP and it is enabled.</string>
          </property>
          <property name="text">
           <string>Map port using &amp;UPnP</string>
@@ -648,7 +625,7 @@
        <item>
         <widget class="QCheckBox" name="mapPortNatpmp">
          <property name="toolTip">
-          <string>Automatically open the Dash Core client port on the router. This only works when your router supports NAT-PMP and it is enabled. The external port could be random.</string>
+          <string>Automatically open the Gryphonmoon Core client port on the router. This only works when your router supports NAT-PMP and it is enabled. The external port could be random.</string>
          </property>
          <property name="text">
           <string>Map port using NA&amp;T-PMP</string>
@@ -668,7 +645,7 @@
        <item>
         <widget class="QCheckBox" name="connectSocks">
          <property name="toolTip">
-          <string>Connect to the Dash network through a SOCKS5 proxy.</string>
+          <string>Connect to the Gryphonmoon network through a SOCKS5 proxy.</string>
          </property>
          <property name="text">
           <string>&amp;Connect through SOCKS5 proxy (default proxy):</string>
@@ -825,7 +802,7 @@
        <item>
         <widget class="QCheckBox" name="connectSocksTor">
          <property name="toolTip">
-          <string>Connect to the Dash network through a separate SOCKS5 proxy for Tor onion services.</string>
+          <string>Connect to the Gryphonmoon network through a separate SOCKS5 proxy for Tor onion services.</string>
          </property>
          <property name="text">
           <string>Use separate SOCKS&amp;5 proxy to reach peers via Tor onion services:</string>
@@ -970,7 +947,7 @@
          </property>
          <property name="text">
           <string>Language missing or translation incomplete? Help contributing translations here:
-https://explore.transifex.com/dash/dash/</string>
+https://explore.transifex.com/gryphonmoon/gryphonmoon/</string>
          </property>
          <property name="wordWrap">
           <bool>true</bool>

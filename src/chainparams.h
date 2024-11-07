@@ -66,7 +66,7 @@ struct ChainTxData {
 
 /**
  * CChainParams defines various tweakable parameters of a given instance of the
- * Dash system.
+ * Gryphonmoon system.
  */
 class CChainParams
 {
@@ -139,6 +139,7 @@ public:
     void UpdateDIP8Parameters(int nActivationHeight);
     void UpdateBudgetParameters(int nMasternodePaymentsStartBlock, int nBudgetPaymentsStartBlock, int nSuperblockStartBlock);
     void UpdateLLMQInstantSend(Consensus::LLMQType llmqType);
+    void UpdateLLMQParams(size_t totalMnCount, int height);
     /**
      * Validate params for Masternodes EHF
      *
@@ -152,7 +153,6 @@ public:
     int FulfilledRequestExpireTime() const { return nFulfilledRequestExpireTime; }
     const std::vector<std::string>& SporkAddresses() const { return vSporkAddresses; }
     int MinSporkKeys() const { return nMinSporkKeys; }
-    int CreditPoolPeriodBlocks() const { return nCreditPoolPeriodBlocks; }
     [[nodiscard]] std::optional<Consensus::LLMQParams> GetLLMQ(Consensus::LLMQType llmqType) const;
 
 protected:
@@ -189,10 +189,7 @@ protected:
     int nMinSporkKeys;
     uint16_t nDefaultPlatformP2PPort;
     uint16_t nDefaultPlatformHTTPPort;
-    /// The number of blocks the credit pool tracks; 576 (one day) on mainnet, reduced on regtest
-    int nCreditPoolPeriodBlocks;
 
-    void AddLLMQ(Consensus::LLMQType llmqType);
 };
 
 /**
@@ -200,7 +197,7 @@ protected:
  * @returns a CChainParams* of the chosen chain.
  * @throws a std::runtime_error if the chain is not supported.
  */
-std::unique_ptr<const CChainParams> CreateChainParams(const ArgsManager& args, const std::string& chain);
+std::unique_ptr<CChainParams> CreateChainParams(const ArgsManager& args, const std::string& chain);
 
 /**
  * Return the currently selected parameters. This won't change after app
@@ -213,5 +210,7 @@ const CChainParams &Params();
  * @throws std::runtime_error when the chain is not supported.
  */
 void SelectParams(const std::string& chain);
+
+void UpdateLLMQParams(size_t totalMnCount, int height);
 
 #endif // BITCOIN_CHAINPARAMS_H

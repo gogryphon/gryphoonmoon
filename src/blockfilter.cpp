@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 The Bitcoin Core developers
+// Copyright (c) 2018-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -47,7 +47,7 @@ GCSFilter::GCSFilter(const Params& params)
     : m_params(params), m_N(0), m_F(0), m_encoded{0}
 {}
 
-GCSFilter::GCSFilter(const Params& params, std::vector<unsigned char> encoded_filter, bool skip_decode_check)
+GCSFilter::GCSFilter(const Params& params, std::vector<unsigned char> encoded_filter)
     : m_params(params), m_encoded(std::move(encoded_filter))
 {
     SpanReader stream{GCS_SER_TYPE, GCS_SER_VERSION, m_encoded, 0};
@@ -58,8 +58,6 @@ GCSFilter::GCSFilter(const Params& params, std::vector<unsigned char> encoded_fi
         throw std::ios_base::failure("N must be <2^32");
     }
     m_F = static_cast<uint64_t>(m_N) * static_cast<uint64_t>(m_params.m_M);
-
-    if (skip_decode_check) return;
 
     // Verify that the encoded filter contains exactly N elements. If it has too much or too little
     // data, a std::ios_base::failure exception will be raised.
@@ -221,14 +219,14 @@ static GCSFilter::ElementSet BasicFilterElements(const CBlock& block,
 }
 
 BlockFilter::BlockFilter(BlockFilterType filter_type, const uint256& block_hash,
-                         std::vector<unsigned char> filter, bool skip_decode_check)
+                         std::vector<unsigned char> filter)
     : m_filter_type(filter_type), m_block_hash(block_hash)
 {
     GCSFilter::Params params;
     if (!BuildParams(params)) {
         throw std::invalid_argument("unknown filter_type");
     }
-    m_filter = GCSFilter(params, std::move(filter), skip_decode_check);
+    m_filter = GCSFilter(params, std::move(filter));
 }
 
 BlockFilter::BlockFilter(BlockFilterType filter_type, const CBlock& block, const CBlockUndo& block_undo)
@@ -259,10 +257,21 @@ bool BlockFilter::BuildParams(GCSFilter::Params& params) const
 
 uint256 BlockFilter::GetHash() const
 {
-    return Hash(GetEncodedFilter());
+    const std::vector<unsigned char>& data = GetEncodedFilter();
+
+    uint256 result;
+    CHash256().Write(data).Finalize(result);
+    return result;
 }
 
 uint256 BlockFilter::ComputeHeader(const uint256& prev_header) const
 {
-    return Hash(GetHash(), prev_header);
+    const uint256& filter_hash = GetHash();
+
+    uint256 result;
+    CHash256()
+        .Write(filter_hash)
+        .Write(prev_header)
+        .Finalize(result);
+    return result;
 }

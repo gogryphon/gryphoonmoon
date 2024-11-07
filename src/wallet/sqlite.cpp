@@ -36,22 +36,6 @@ static void ErrorLogCallback(void* arg, int code, const char* msg)
     LogPrintf("SQLite Error. Code: %d. Message: %s\n", code, msg);
 }
 
-static bool BindBlobToStatement(sqlite3_stmt* stmt,
-                                int index,
-                                Span<const std::byte> blob,
-                                const std::string& description)
-{
-    int res = sqlite3_bind_blob(stmt, index, blob.data(), blob.size(), SQLITE_STATIC);
-    if (res != SQLITE_OK) {
-        LogPrintf("Unable to bind %s to statement: %s\n", description, sqlite3_errstr(res));
-        sqlite3_clear_bindings(stmt);
-        sqlite3_reset(stmt);
-        return false;
-    }
-
-    return true;
-}
-
 static std::optional<int> ReadPragmaInteger(sqlite3* db, const std::string& key, const std::string& description, bilingual_str& error)
 {
     std::string stmt_text = strprintf("PRAGMA %s", key);
@@ -83,7 +67,7 @@ static void SetPragma(sqlite3* db, const std::string& key, const std::string& va
 }
 
 SQLiteDatabase::SQLiteDatabase(const fs::path& dir_path, const fs::path& file_path, bool mock)
-    : WalletDatabase(), m_mock(mock), m_dir_path(fs::PathToString(dir_path)), m_file_path(fs::PathToString(file_path))
+    : WalletDatabase(), m_mock(mock), m_dir_path(dir_path.string()), m_file_path(file_path.string())
 {
     {
         LOCK(g_sqlite_mutex);
@@ -222,7 +206,7 @@ void SQLiteDatabase::Open()
 
     if (m_db == nullptr) {
         if (!m_mock) {
-            TryCreateDirectories(fs::PathFromString(m_dir_path));
+            TryCreateDirectories(m_dir_path);
         }
         int ret = sqlite3_open_v2(m_file_path.c_str(), &m_db, flags, nullptr);
         if (ret != SQLITE_OK) {
@@ -244,7 +228,7 @@ void SQLiteDatabase::Open()
     // Now begin a transaction to acquire the exclusive lock. This lock won't be released until we close because of the exclusive locking mode.
     int ret = sqlite3_exec(m_db, "BEGIN EXCLUSIVE TRANSACTION", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another dashd?\n");
+        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another gryphonmoond?\n");
     }
     ret = sqlite3_exec(m_db, "COMMIT", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
@@ -392,8 +376,14 @@ bool SQLiteBatch::ReadKey(CDataStream&& key, CDataStream& value)
     assert(m_read_stmt);
 
     // Bind: leftmost parameter in statement is index 1
-    if (!BindBlobToStatement(m_read_stmt, 1, key, "key")) return false;
-    int res = sqlite3_step(m_read_stmt);
+    int res = sqlite3_bind_blob(m_read_stmt, 1, key.data(), key.size(), SQLITE_STATIC);
+    if (res != SQLITE_OK) {
+        LogPrintf("%s: Unable to bind statement: %s\n", __func__, sqlite3_errstr(res));
+        sqlite3_clear_bindings(m_read_stmt);
+        sqlite3_reset(m_read_stmt);
+        return false;
+    }
+    res = sqlite3_step(m_read_stmt);
     if (res != SQLITE_ROW) {
         if (res != SQLITE_DONE) {
             // SQLITE_DONE means "not found", don't log an error in that case.
@@ -427,11 +417,23 @@ bool SQLiteBatch::WriteKey(CDataStream&& key, CDataStream&& value, bool overwrit
 
     // Bind: leftmost parameter in statement is index 1
     // Insert index 1 is key, 2 is value
-    if (!BindBlobToStatement(stmt, 1, key, "key")) return false;
-    if (!BindBlobToStatement(stmt, 2, value, "value")) return false;
+    int res = sqlite3_bind_blob(stmt, 1, key.data(), key.size(), SQLITE_STATIC);
+    if (res != SQLITE_OK) {
+        LogPrintf("%s: Unable to bind key to statement: %s\n", __func__, sqlite3_errstr(res));
+        sqlite3_clear_bindings(stmt);
+        sqlite3_reset(stmt);
+        return false;
+    }
+    res = sqlite3_bind_blob(stmt, 2, value.data(), value.size(), SQLITE_STATIC);
+    if (res != SQLITE_OK) {
+        LogPrintf("%s: Unable to bind value to statement: %s\n", __func__, sqlite3_errstr(res));
+        sqlite3_clear_bindings(stmt);
+        sqlite3_reset(stmt);
+        return false;
+    }
 
     // Execute
-    int res = sqlite3_step(stmt);
+    res = sqlite3_step(stmt);
     sqlite3_clear_bindings(stmt);
     sqlite3_reset(stmt);
     if (res != SQLITE_DONE) {
@@ -446,10 +448,16 @@ bool SQLiteBatch::EraseKey(CDataStream&& key)
     assert(m_delete_stmt);
 
     // Bind: leftmost parameter in statement is index 1
-    if (!BindBlobToStatement(m_delete_stmt, 1, key, "key")) return false;
+    int res = sqlite3_bind_blob(m_delete_stmt, 1, key.data(), key.size(), SQLITE_STATIC);
+    if (res != SQLITE_OK) {
+        LogPrintf("%s: Unable to bind statement: %s\n", __func__, sqlite3_errstr(res));
+        sqlite3_clear_bindings(m_delete_stmt);
+        sqlite3_reset(m_delete_stmt);
+        return false;
+    }
 
     // Execute
-    int res = sqlite3_step(m_delete_stmt);
+    res = sqlite3_step(m_delete_stmt);
     sqlite3_clear_bindings(m_delete_stmt);
     sqlite3_reset(m_delete_stmt);
     if (res != SQLITE_DONE) {
@@ -464,11 +472,18 @@ bool SQLiteBatch::HasKey(CDataStream&& key)
     assert(m_read_stmt);
 
     // Bind: leftmost parameter in statement is index 1
-    if (!BindBlobToStatement(m_read_stmt, 1, key, "key")) return false;
-    int res = sqlite3_step(m_read_stmt);
+    bool ret = false;
+    int res = sqlite3_bind_blob(m_read_stmt, 1, key.data(), key.size(), SQLITE_STATIC);
+    if (res == SQLITE_OK) {
+        res = sqlite3_step(m_read_stmt);
+        if (res == SQLITE_ROW) {
+            ret = true;
+        }
+    }
+
     sqlite3_clear_bindings(m_read_stmt);
     sqlite3_reset(m_read_stmt);
-    return res == SQLITE_ROW;
+    return ret;
 }
 
 bool SQLiteBatch::StartCursor()

@@ -6,7 +6,7 @@
 #define BITCOIN_BANMAN_H
 
 #include <addrdb.h>
-#include <common/bloom.h>
+#include <bloom.h>
 #include <fs.h>
 #include <net_types.h> // For banmap_t
 #include <sync.h>
@@ -81,12 +81,11 @@ public:
     void DumpBanlist();
 
 private:
-    void LoadBanlist() EXCLUSIVE_LOCKS_REQUIRED(!m_cs_banned);
     bool BannedSetIsDirty();
     //!set the "dirty" flag for the banlist
     void SetBannedSetDirty(bool dirty = true);
     //!clean unused entries (if bantime has expired)
-    void SweepBanned() EXCLUSIVE_LOCKS_REQUIRED(m_cs_banned);
+    void SweepBanned();
 
     RecursiveMutex m_cs_banned;
     banmap_t m_banned GUARDED_BY(m_cs_banned);

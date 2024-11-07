@@ -1,0 +1,6 @@
+usr/local/bin/gryphonmoon-qt usr/bin
+share/pixmaps/gryphonmoon32.xpm usr/share/pixmaps
+share/pixmaps/gryphonmoon16.xpm usr/share/pixmaps
+share/pixmaps/gryphonmoon128.png usr/share/pixmaps
+debian/gryphonmoon-qt.desktop usr/share/applications
+debian/gryphonmoon-qt.protocol usr/share/kde4/services/

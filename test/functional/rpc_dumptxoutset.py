@@ -23,7 +23,7 @@ class DumptxoutsetTest(BitcoinTestFramework):
         node = self.nodes[0]
         mocktime = node.getblockheader(node.getblockhash(0))['time'] + 1
         node.setmocktime(mocktime)
-        self.generate(node, COINBASE_MATURITY)
+        node.generate(COINBASE_MATURITY)
 
         FILENAME = 'txoutset.dat'
         out = node.dumptxoutset(FILENAME)
@@ -43,7 +43,7 @@ class DumptxoutsetTest(BitcoinTestFramework):
             digest = hashlib.sha256(f.read()).hexdigest()
             # UTXO snapshot hash should be deterministic based on mocked time.
             assert_equal(
-                digest, '32f1d4b7f643c97e88c540f431e8277fdd9332c3dea260b046c93787745e35b0')
+                digest, '83ec62f0b9d9f2cdfe4514e8996d5ba0a6aa4cf74517988670d912db83bc0318')
 
         # Specifying a path to an existing file will fail.
         assert_raises_rpc_error(

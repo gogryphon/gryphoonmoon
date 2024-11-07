@@ -11,12 +11,11 @@
 
 #include <qt/optionsdialog.h>
 
-#include <consensus/amount.h>
+#include <amount.h>
 
 #include <QLabel>
 #include <QMainWindow>
 #include <QMap>
-#include <QMenu>
 #include <QPoint>
 #include <QPushButton>
 #include <QSystemTrayIcon>
@@ -52,6 +51,7 @@ class QAction;
 class QButtonGroup;
 class QComboBox;
 class QDateTime;
+class QMenu;
 class QProgressBar;
 class QProgressDialog;
 class QToolButton;
@@ -190,8 +190,6 @@ private:
     ModalOverlay* modalOverlay = nullptr;
     QButtonGroup* tabGroup = nullptr;
 
-    QMenu* m_network_context_menu = new QMenu(this);
-
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
 #endif
@@ -266,7 +264,7 @@ public Q_SLOTS:
     /** Set number of connections shown in the UI */
     void setNumConnections(int count);
     /** Set network state shown in the UI */
-    void setNetworkActive(bool network_active);
+    void setNetworkActive(bool networkActive);
     /** Get restart command-line parameters and request restart */
     void handleRestart(QStringList args);
     /** Set number of blocks and last block date shown in the UI */
@@ -338,7 +336,7 @@ public Q_SLOTS:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
-    /** Load Partially Signed Dash Transaction from file or clipboard */
+    /** Load Partially Signed Gryphonmoon Transaction from file or clipboard */
     void gotoLoadPSBT(bool from_clipboard = false);
 
     /** Show open dialog */
@@ -361,7 +359,7 @@ public Q_SLOTS:
     void showPeers();
     void showRepair();
 
-    /** Open external (default) editor with dash.conf */
+    /** Open external (default) editor with gryphonmoon.conf */
     void showConfEditor();
     /** Show folder with wallet backups in default file browser */
     void showBackups();
@@ -389,6 +387,9 @@ public Q_SLOTS:
 
     /** Show progress dialog e.g. for verifychain */
     void showProgress(const QString &title, int nProgress);
+
+    /** When hideTrayIcon setting is changed in OptionsModel hide or show the icon accordingly. */
+    void setTrayIconVisible(bool);
 
     void showModalOverlay();
 

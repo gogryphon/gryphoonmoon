@@ -6,7 +6,6 @@
 
 #include <evo/assetlocktx.h>
 #include <evo/cbtx.h>
-#include <evo/evodb.h>
 #include <evo/specialtx.h>
 
 #include <chain.h>
@@ -15,7 +14,6 @@
 #include <deploymentstatus.h>
 #include <logging.h>
 #include <node/blockstorage.h>
-#include <util/irange.h>
 #include <validation.h>
 
 #include <algorithm>
@@ -24,9 +22,13 @@
 #include <stack>
 
 // Forward declaration to prevent a new circular dependencies through masternode/payments.h
+namespace MasternodePayments {
 CAmount PlatformShare(const CAmount masternodeReward);
+} // namespace MasternodePayments
 
 static const std::string DB_CREDITPOOL_SNAPSHOT = "cpm_S";
+
+std::unique_ptr<CCreditPoolManager> creditPoolManager;
 
 static bool GetDataFromUnlockTx(const CTransaction& tx, CAmount& toUnlock, uint64_t& index, TxValidationState& state)
 {
@@ -59,7 +61,7 @@ static UnlockDataPerBlock GetDataFromUnlockTxes(const std::vector<CTransactionRe
     UnlockDataPerBlock blockData;
 
     for (CTransactionRef tx : vtx) {
-        if (!tx->IsSpecialTxVersion() || tx->nType != TRANSACTION_ASSET_UNLOCK) continue;
+        if (tx->nVersion != 3 || tx->nType != TRANSACTION_ASSET_UNLOCK) continue;
 
         CAmount unlocked{0};
         TxValidationState tx_state;
@@ -118,12 +120,11 @@ static std::optional<CBlock> GetBlockForCreditPool(const CBlockIndex* const bloc
     if (!ReadBlockFromDisk(block, block_index, consensusParams)) {
         throw std::runtime_error("failed-getcbforblock-read");
     }
+    // Should not fail if V20 (DIP0027) is active but it happens for RegChain (unit tests)
+    if (block.vtx[0]->nVersion != 3) return std::nullopt;
 
     assert(!block.vtx.empty());
-
-    // Should not fail if V20 (DIP0027) is active but it happens for RegChain (unit tests)
-    if (!block.vtx[0]->IsSpecialTxVersion()) return std::nullopt;
-
+    assert(block.vtx[0]->nVersion == 3);
     assert(!block.vtx[0]->vExtraPayload.empty());
 
     return block;
@@ -135,13 +136,9 @@ CCreditPool CCreditPoolManager::ConstructCreditPool(const CBlockIndex* const blo
     if (!block) {
         // If reading of previous block is not successfully, but
         // prev contains credit pool related data, something strange happened
-        if (prev.locked != 0) {
-            throw std::runtime_error(strprintf("Failed to create CreditPool but previous block has value"));
-        }
-        if (!prev.indexes.IsEmpty()) {
-            throw std::runtime_error(
-                strprintf("Failed to create CreditPool but asset unlock transactions already mined"));
-        }
+        assert(prev.locked == 0);
+        assert(prev.indexes.IsEmpty());
+
         CCreditPool emptyPool;
         AddToCache(block_index->GetBlockHash(), block_index->nHeight, emptyPool);
         return emptyPool;
@@ -154,7 +151,7 @@ CCreditPool CCreditPoolManager::ConstructCreditPool(const CBlockIndex* const blo
         return opt_cbTx->creditPoolBalance;
     }();
 
-    // We use here sliding window with Params().CreditPoolPeriodBlocks to determine
+    // We use here sliding window with LimitBlocksToTrace to determine
     // current limits for asset unlock transactions.
     // Indexes should not be duplicated since genesis block, but the Unlock Amount
     // of withdrawal transaction is limited only by this window
@@ -165,7 +162,7 @@ CCreditPool CCreditPoolManager::ConstructCreditPool(const CBlockIndex* const blo
     }
 
     const CBlockIndex* distant_block_index = block_index;
-    for ([[maybe_unused]] auto _ : irange::range(Params().CreditPoolPeriodBlocks())) {
+    for (size_t i = 0; i < CCreditPoolManager::LimitBlocksToTrace; ++i) {
         distant_block_index = distant_block_index->pprev;
         if (distant_block_index == nullptr) break;
     }
@@ -176,30 +173,22 @@ CCreditPool CCreditPoolManager::ConstructCreditPool(const CBlockIndex* const blo
         }
     }
 
+    // Unlock limits are # max(100, min(.10 * assetlockpool, 1000)) inside window
     CAmount currentLimit = locked;
     const CAmount latelyUnlocked = prev.latelyUnlocked + blockData.unlocked - distantUnlocked;
-    if (DeploymentActiveAt(*block_index, Params().GetConsensus(), Consensus::DEPLOYMENT_WITHDRAWALS)) {
-        currentLimit = std::min(currentLimit, LimitAmountV22);
-    } else {
-        // Unlock limits in pre-v22 are max(100, min(.10 * assetlockpool, 1000)) inside window
-        if (currentLimit + latelyUnlocked > LimitAmountLow) {
-            currentLimit = std::max(LimitAmountLow, locked / 10) - latelyUnlocked;
-            if (currentLimit < 0) currentLimit = 0;
-        }
-        currentLimit = std::min(currentLimit, LimitAmountHigh - latelyUnlocked);
+    if (currentLimit + latelyUnlocked > LimitAmountLow) {
+        currentLimit = std::max(LimitAmountLow, locked / 10) - latelyUnlocked;
+        if (currentLimit < 0) currentLimit = 0;
     }
+    currentLimit = std::min(currentLimit, LimitAmountHigh - latelyUnlocked);
 
-    if (currentLimit != 0 || latelyUnlocked > 0 || locked > 0) {
-        LogPrint(BCLog::CREDITPOOL, /* Continued */
-                 "CCreditPoolManager: asset unlock limits on height: %d locked: %d.%08d limit: %d.%08d "
-                 "unlocked-in-window: %d.%08d\n",
-                 block_index->nHeight, locked / COIN, locked % COIN, currentLimit / COIN, currentLimit % COIN,
-                 latelyUnlocked / COIN, latelyUnlocked % COIN);
-    }
+    assert(currentLimit >= 0);
 
-    if (currentLimit < 0) {
-        throw std::runtime_error(
-            strprintf("Negative limit for CreditPool: %d.%08d\n", currentLimit / COIN, currentLimit % COIN));
+    if (currentLimit > 0 || latelyUnlocked > 0 || locked > 0) {
+        LogPrint(BCLog::CREDITPOOL, "CCreditPoolManager: asset unlock limits on height: %d locked: %d.%08d limit: %d.%08d previous: %d.%08d\n",
+               block_index->nHeight, locked / COIN, locked % COIN,
+               currentLimit / COIN, currentLimit % COIN,
+               latelyUnlocked / COIN, latelyUnlocked % COIN);
     }
 
     CCreditPool pool{locked, currentLimit, latelyUnlocked, indexes};
@@ -239,7 +228,7 @@ CCreditPoolDiff::CCreditPoolDiff(CCreditPool starter, const CBlockIndex *pindexP
 
     if (DeploymentActiveAfter(pindexPrev, consensusParams, Consensus::DEPLOYMENT_MN_RR)) {
         // We consider V20 active if mn_rr is active
-        platformReward = PlatformShare(GetMasternodePayment(pindexPrev->nHeight + 1, blockSubsidy, /*fV20Active=*/ true));
+        platformReward = MasternodePayments::PlatformShare(GetMasternodePayment(pindexPrev->nHeight + 1, blockSubsidy, /*fV20Active=*/ true));
     }
 }
 
@@ -281,12 +270,12 @@ bool CCreditPoolDiff::Unlock(const CTransaction& tx, TxValidationState& state)
     return true;
 }
 
-bool CCreditPoolDiff::ProcessLockUnlockTransaction(const BlockManager& blockman, const llmq::CQuorumManager& qman, const CTransaction& tx, TxValidationState& state)
+bool CCreditPoolDiff::ProcessLockUnlockTransaction(const CTransaction& tx, TxValidationState& state)
 {
-    if (!tx.IsSpecialTxVersion()) return true;
+    if (tx.nVersion != 3) return true;
     if (tx.nType != TRANSACTION_ASSET_LOCK && tx.nType != TRANSACTION_ASSET_UNLOCK) return true;
 
-    if (!CheckAssetLockUnlockTx(blockman, qman, tx, pindexPrev, pool.indexes, state)) {
+    if (!CheckAssetLockUnlockTx(tx, pindexPrev, pool.indexes, state)) {
         // pass the state returned by the function above
         return false;
     }
@@ -306,18 +295,17 @@ bool CCreditPoolDiff::ProcessLockUnlockTransaction(const BlockManager& blockman,
     }
 }
 
-std::optional<CCreditPoolDiff> GetCreditPoolDiffForBlock(CCreditPoolManager& cpoolman, const BlockManager& blockman, const llmq::CQuorumManager& qman,
-                                                         const CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams,
+std::optional<CCreditPoolDiff> GetCreditPoolDiffForBlock(const CBlock& block, const CBlockIndex* pindexPrev, const Consensus::Params& consensusParams,
                                                          const CAmount blockSubsidy, BlockValidationState& state)
 {
     try {
-        const CCreditPool creditPool = cpoolman.GetCreditPool(pindexPrev, consensusParams);
+        const CCreditPool creditPool = creditPoolManager->GetCreditPool(pindexPrev, consensusParams);
         LogPrint(BCLog::CREDITPOOL, "%s: CCreditPool is %s\n", __func__, creditPool.ToString());
         CCreditPoolDiff creditPoolDiff(creditPool, pindexPrev, consensusParams, blockSubsidy);
         for (size_t i = 1; i < block.vtx.size(); ++i) {
             const auto& tx = *block.vtx[i];
             TxValidationState tx_state;
-            if (!creditPoolDiff.ProcessLockUnlockTransaction(blockman, qman, tx, tx_state)) {
+            if (!creditPoolDiff.ProcessLockUnlockTransaction(tx, tx_state)) {
                 assert(tx_state.GetResult() == TxValidationResult::TX_CONSENSUS);
                 state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, tx_state.GetRejectReason(),
                                  strprintf("Process Lock/Unlock Transaction failed at Credit Pool (tx hash %s) %s", tx.GetHash().ToString(), tx_state.GetDebugMessage()));

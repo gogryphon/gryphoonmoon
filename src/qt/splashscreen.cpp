@@ -66,13 +66,13 @@ SplashScreen::SplashScreen(const NetworkStyle *networkStyle) :
 
     // Adjust logo color based on the current theme
     QImage imgLogo = pixmapLogo.toImage().convertToFormat(QImage::Format_ARGB32);
-    QColor logoColor = GUIUtil::getThemedQColor(GUIUtil::ThemedColor::BLUE);
-    for (int x = 0; x < imgLogo.width(); ++x) {
-        for (int y = 0; y < imgLogo.height(); ++y) {
-            const QRgb rgb = imgLogo.pixel(x, y);
-            imgLogo.setPixel(x, y, qRgba(logoColor.red(), logoColor.green(), logoColor.blue(), qAlpha(rgb)));
-        }
-    }
+    // QColor logoColor = GUIUtil::getThemedQColor(GUIUtil::ThemedColor::BLUE);
+    // for (int x = 0; x < imgLogo.width(); ++x) {
+    //     for (int y = 0; y < imgLogo.height(); ++y) {
+    //         const QRgb rgb = imgLogo.pixel(x, y);
+    //         imgLogo.setPixel(x, y, qRgba(logoColor.red(), logoColor.green(), logoColor.blue(), qAlpha(rgb)));
+    //     }
+    // }
     pixmapLogo.convertFromImage(imgLogo);
 
     pixmap = QPixmap(width * scale, height * scale);
@@ -189,8 +189,8 @@ static void InitMessage(SplashScreen *splash, const std::string &message)
 static void ShowProgress(SplashScreen *splash, const std::string &title, int nProgress, bool resume_possible)
 {
     InitMessage(splash, title + std::string("\n") +
-            (resume_possible ? SplashScreen::tr("(press q to shutdown and continue later)").toStdString()
-                                : SplashScreen::tr("press q to shutdown").toStdString()) +
+            (resume_possible ? _("(press q to shutdown and continue later)").translated
+                                : _("press q to shutdown").translated) +
             strprintf("\n%d", nProgress) + "%");
 }
 

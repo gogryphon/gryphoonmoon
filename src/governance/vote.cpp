@@ -8,11 +8,9 @@
 #include <bls/bls.h>
 #include <chainparams.h>
 #include <key.h>
-#include <masternode/node.h>
 #include <masternode/sync.h>
 #include <messagesigner.h>
-#include <net_processing.h>
-#include <timedata.h>
+#include <net.h>
 #include <util/string.h>
 #include <util/system.h>
 #include <validation.h>
@@ -110,9 +108,10 @@ CGovernanceVote::CGovernanceVote(const COutPoint& outpointMasternodeIn, const ui
     UpdateHash();
 }
 
-std::string CGovernanceVote::ToString(const CDeterministicMNList& tip_mn_list) const
+std::string CGovernanceVote::ToString() const
 {
-    auto dmn = tip_mn_list.GetMNByCollateral(masternodeOutpoint);
+    auto mnList = deterministicMNManager->GetListAtChainTip();
+    auto dmn = mnList.GetMNByCollateral(masternodeOutpoint);
     int voteWeight = dmn != nullptr ? GetMnType(dmn->nType).voting_weight : 0;
     std::ostringstream ostr;
     ostr << masternodeOutpoint.ToStringShort() << ":"
@@ -123,21 +122,22 @@ std::string CGovernanceVote::ToString(const CDeterministicMNList& tip_mn_list) c
     return ostr.str();
 }
 
-void CGovernanceVote::Relay(PeerManager& peerman, const CMasternodeSync& mn_sync, const CDeterministicMNList& tip_mn_list) const
+void CGovernanceVote::Relay(CConnman& connman) const
 {
     // Do not relay until fully synced
-    if (!mn_sync.IsSynced()) {
+    if (!::masternodeSync->IsSynced()) {
         LogPrint(BCLog::GOBJECT, "CGovernanceVote::Relay -- won't relay until fully synced\n");
         return;
     }
 
-    auto dmn = tip_mn_list.GetMNByCollateral(masternodeOutpoint);
+    auto mnList = deterministicMNManager->GetListAtChainTip();
+    auto dmn = mnList.GetMNByCollateral(masternodeOutpoint);
     if (!dmn) {
         return;
     }
 
     CInv inv(MSG_GOVERNANCE_OBJECT_VOTE, GetHash());
-    peerman.RelayInv(inv);
+    connman.RelayInv(inv);
 }
 
 void CGovernanceVote::UpdateHash() const
@@ -163,6 +163,41 @@ uint256 CGovernanceVote::GetSignatureHash() const
     return SerializeHash(*this);
 }
 
+bool CGovernanceVote::Sign(const CKey& key, const CKeyID& keyID)
+{
+    std::string strError;
+
+    // Harden Spork6 so that it is active on testnet and no other networks
+    if (Params().NetworkIDString() == CBaseChainParams::TESTNET) {
+        uint256 signatureHash = GetSignatureHash();
+
+        if (!CHashSigner::SignHash(signatureHash, key, vchSig)) {
+            LogPrintf("CGovernanceVote::Sign -- SignHash() failed\n");
+            return false;
+        }
+
+        if (!CHashSigner::VerifyHash(signatureHash, keyID, vchSig, strError)) {
+            LogPrintf("CGovernanceVote::Sign -- VerifyHash() failed, error: %s\n", strError);
+            return false;
+        }
+    } else {
+        std::string strMessage = masternodeOutpoint.ToStringShort() + "|" + nParentHash.ToString() + "|" +
+                                 ::ToString(nVoteSignal) + "|" + ::ToString(nVoteOutcome) + "|" + ::ToString(nTime);
+
+        if (!CMessageSigner::SignMessage(strMessage, vchSig, key)) {
+            LogPrintf("CGovernanceVote::Sign -- SignMessage() failed\n");
+            return false;
+        }
+
+        if (!CMessageSigner::VerifyMessage(keyID, vchSig, strMessage, strError)) {
+            LogPrintf("CGovernanceVote::Sign -- VerifyMessage() failed, error: %s\n", strError);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool CGovernanceVote::CheckSignature(const CKeyID& keyID) const
 {
     std::string strError;
@@ -174,7 +209,12 @@ bool CGovernanceVote::CheckSignature(const CKeyID& keyID) const
             return false;
         }
     } else {
-        if (!CMessageSigner::VerifyMessage(keyID, vchSig, GetSignatureString(), strError)) {
+        std::string strMessage = masternodeOutpoint.ToStringShort() + "|" + nParentHash.ToString() + "|" +
+                                 ::ToString(nVoteSignal) + "|" +
+                                 ::ToString(nVoteOutcome) + "|" +
+                                 ::ToString(nTime);
+
+        if (!CMessageSigner::VerifyMessage(keyID, vchSig, strMessage, strError)) {
             LogPrint(BCLog::GOBJECT, "CGovernanceVote::IsValid -- VerifyMessage() failed, error: %s\n", strError);
             return false;
         }
@@ -183,9 +223,9 @@ bool CGovernanceVote::CheckSignature(const CKeyID& keyID) const
     return true;
 }
 
-bool CGovernanceVote::Sign(const CActiveMasternodeManager& mn_activeman)
+bool CGovernanceVote::Sign(const CBLSSecretKey& key)
 {
-    CBLSSignature sig = mn_activeman.Sign(GetSignatureHash(), false);
+    CBLSSignature sig = key.Sign(GetSignatureHash(), false);
     if (!sig.IsValid()) {
         return false;
     }
@@ -204,7 +244,7 @@ bool CGovernanceVote::CheckSignature(const CBLSPublicKey& pubKey) const
     return true;
 }
 
-bool CGovernanceVote::IsValid(const CDeterministicMNList& tip_mn_list, bool useVotingKey) const
+bool CGovernanceVote::IsValid(bool useVotingKey) const
 {
     if (nTime > GetAdjustedTime() + (60 * 60)) {
         LogPrint(BCLog::GOBJECT, "CGovernanceVote::IsValid -- vote is too far ahead of current time - %s - nTime %lli - Max Time %lli\n", GetHash().ToString(), nTime, GetAdjustedTime() + (60 * 60));
@@ -223,7 +263,7 @@ bool CGovernanceVote::IsValid(const CDeterministicMNList& tip_mn_list, bool useV
         return false;
     }
 
-    auto dmn = tip_mn_list.GetMNByCollateral(masternodeOutpoint);
+    auto dmn = deterministicMNManager->GetListAtChainTip().GetMNByCollateral(masternodeOutpoint);
     if (!dmn) {
         LogPrint(BCLog::GOBJECT, "CGovernanceVote::IsValid -- Unknown Masternode - %s\n", masternodeOutpoint.ToStringShort());
         return false;
@@ -234,14 +274,6 @@ bool CGovernanceVote::IsValid(const CDeterministicMNList& tip_mn_list, bool useV
     } else {
         return CheckSignature(dmn->pdmnState->pubKeyOperator.Get());
     }
-}
-
-std::string CGovernanceVote::GetSignatureString() const
-{
-    return masternodeOutpoint.ToStringShort() + "|" + nParentHash.ToString() + "|" +
-                             ::ToString(nVoteSignal) + "|" +
-                             ::ToString(nVoteOutcome) + "|" +
-                             ::ToString(nTime);
 }
 
 bool operator==(const CGovernanceVote& vote1, const CGovernanceVote& vote2)

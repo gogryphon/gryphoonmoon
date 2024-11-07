@@ -12,7 +12,7 @@ if [ -z "${1}" ]; then
   echo "Usage: $0 <base-dir> [<extra-bdb-configure-flag> ...]"
   echo
   echo "Must specify a single argument: the directory in which db4 will be built."
-  echo "This is probably \`pwd\` if you're at the root of the dash repository."
+  echo "This is probably \`pwd\` if you're at the root of the gryphonmoon repository."
   exit 1
 fi
 
@@ -32,15 +32,16 @@ check_exists() {
 sha256_check() {
   # Args: <sha256_hash> <filename>
   #
-  if [ "$(uname)" = "FreeBSD" ]; then
-    # sha256sum exists on FreeBSD, but takes different arguments than the GNU version
-    sha256 -c "${1}" "${2}"
-  elif check_exists sha256sum; then
-    echo "${1} ${2}" | sha256sum -c
+  if check_exists sha256sum; then
+    echo "${1}  ${2}" | sha256sum -c
   elif check_exists sha256; then
-    echo "${1} ${2}" | sha256 -c
+    if [ "$(uname)" = "FreeBSD" ]; then
+      sha256 -c "${1}" "${2}"
+    else
+      echo "${1}  ${2}" | sha256 -c
+    fi
   else
-    echo "${1} ${2}" | shasum -a 256 -c
+    echo "${1}  ${2}" | shasum -a 256 -c
   fi
 }
 
@@ -252,7 +253,7 @@ echo
 echo "db4 build complete."
 echo
 # shellcheck disable=SC2016
-echo 'When compiling dashd, run `./configure` in the following way:'
+echo 'When compiling gryphonmoond, run `./configure` in the following way:'
 echo
 echo "  export BDB_PREFIX='${BDB_PREFIX}'"
 # shellcheck disable=SC2016

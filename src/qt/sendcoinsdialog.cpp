@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2020 The Bitcoin Core developers
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,11 +27,8 @@
 #include <wallet/coincontrol.h>
 #include <wallet/fees.h>
 #include <wallet/wallet.h>
-#include <validation.h>
 
-#include <array>
-#include <fstream>
-#include <memory>
+#include <validation.h>
 
 #include <QFontMetrics>
 #include <QScrollBar>
@@ -156,8 +153,6 @@ SendCoinsDialog::SendCoinsDialog(bool _fCoinJoin, QWidget* parent) :
     }
 
     m_coin_control->UseCoinJoin(_fCoinJoin);
-
-    GUIUtil::ExceptionSafeConnect(ui->sendButton, &QPushButton::clicked, this, &SendCoinsDialog::sendButtonClicked);
 }
 
 void SendCoinsDialog::setClientModel(ClientModel *_clientModel)
@@ -210,15 +205,15 @@ void SendCoinsDialog::setModel(WalletModel *_model)
         for (const int n : confTargets) {
             ui->confTargetSelector->addItem(tr("%1 (%2 blocks)").arg(GUIUtil::formatNiceTimeOffset(n*Params().GetConsensus().nPowTargetSpacing)).arg(n));
         }
-        connect(ui->confTargetSelector, qOverload<int>(&QComboBox::currentIndexChanged), this, &SendCoinsDialog::updateSmartFeeLabel);
-        connect(ui->confTargetSelector, qOverload<int>(&QComboBox::currentIndexChanged), this, &SendCoinsDialog::coinControlUpdateLabels);
+        connect(ui->confTargetSelector, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &SendCoinsDialog::updateSmartFeeLabel);
+        connect(ui->confTargetSelector, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &SendCoinsDialog::coinControlUpdateLabels);
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0))
         connect(ui->groupFee, &QButtonGroup::idClicked, this, &SendCoinsDialog::updateFeeSectionControls);
         connect(ui->groupFee, &QButtonGroup::idClicked, this, &SendCoinsDialog::coinControlUpdateLabels);
 #else
-        connect(ui->groupFee, qOverload<int>(&QButtonGroup::buttonClicked), this, &SendCoinsDialog::updateFeeSectionControls);
-        connect(ui->groupFee, qOverload<int>(&QButtonGroup::buttonClicked), this, &SendCoinsDialog::coinControlUpdateLabels);
+        connect(ui->groupFee, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked), this, &SendCoinsDialog::updateFeeSectionControls);
+        connect(ui->groupFee, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked), this, &SendCoinsDialog::coinControlUpdateLabels);
 #endif
 
         connect(ui->customFee, &BitcoinAmountField::valueChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
@@ -319,7 +314,7 @@ bool SendCoinsDialog::send(const QList<SendCoinsRecipient>& recipients, QString&
     m_current_transaction = std::make_unique<WalletModelTransaction>(recipients);
     WalletModel::SendCoinsReturn prepareStatus;
 
-    updateCoinControlState();
+    updateCoinControlState(*m_coin_control);
 
     prepareStatus = model->prepareTransaction(*m_current_transaction, *m_coin_control);
 
@@ -457,14 +452,14 @@ bool SendCoinsDialog::send(const QList<SendCoinsRecipient>& recipients, QString&
         .arg(alternativeUnits.join(" " + tr("or") + " ")));
 
     if (formatted.size() > 1) {
-        informative_text = tr("To review recipient list click \"Show Details…\"");
+        informative_text = tr("To review recipient list click \"Show Details...\"");
         detailed_text = formatted.join("\n\n");
     }
 
     return true;
 }
 
-void SendCoinsDialog::sendButtonClicked([[maybe_unused]] bool checked)
+void SendCoinsDialog::on_sendButton_clicked()
 {
     if(!model || !model->getOptionsModel())
         return;
@@ -490,7 +485,7 @@ void SendCoinsDialog::sendButtonClicked([[maybe_unused]] bool checked)
         CMutableTransaction mtx = CMutableTransaction{*(m_current_transaction->getWtx())};
         PartiallySignedTransaction psbtx(mtx);
         bool complete = false;
-        const TransactionError err = model->wallet().fillPSBT(SIGHASH_ALL, false /* sign */, true /* bip32derivs */, nullptr, psbtx, complete);
+        const TransactionError err = model->wallet().fillPSBT(SIGHASH_ALL, false /* sign */, true /* bip32derivs */, psbtx, complete, nullptr);
         assert(!complete);
         assert(err == TransactionError::OK);
         // Serialize the PSBT
@@ -524,7 +519,7 @@ void SendCoinsDialog::sendButtonClicked([[maybe_unused]] bool checked)
             if (filename.isEmpty()) {
                 return;
             }
-            std::ofstream out{filename.toLocal8Bit().data(), std::ofstream::out | std::ofstream::binary};
+            std::ofstream out(filename.toLocal8Bit().data(), std::ofstream::out | std::ofstream::binary);
             out << ssTx.str();
             out.close();
             Q_EMIT message(tr("PSBT saved"), "PSBT saved to disk", CClientUIInterface::MSG_INFORMATION);
@@ -832,18 +827,18 @@ void SendCoinsDialog::updateFeeMinimizedLabel()
     }
 }
 
-void SendCoinsDialog::updateCoinControlState()
+void SendCoinsDialog::updateCoinControlState(CCoinControl& ctrl)
 {
     if (ui->radioCustomFee->isChecked()) {
-        m_coin_control->m_feerate = CFeeRate(ui->customFee->value());
+        ctrl.m_feerate = CFeeRate(ui->customFee->value());
     } else {
-        m_coin_control->m_feerate.reset();
+        ctrl.m_feerate.reset();
     }
     // Avoid using global defaults when sending money from the GUI
     // Either custom fee will be used or if not selected, the confirmation target from dropdown box
-    m_coin_control->m_confirm_target = getConfTargetForIndex(ui->confTargetSelector->currentIndex());
+    ctrl.m_confirm_target = getConfTargetForIndex(ui->confTargetSelector->currentIndex());
     // Include watch-only for wallets without private key
-    m_coin_control->fAllowWatchOnly = model->wallet().privateKeysDisabled();
+    ctrl.fAllowWatchOnly = model->wallet().privateKeysDisabled();
 }
 
 void SendCoinsDialog::updateNumberOfBlocks(int count, const QDateTime& blockDate, const QString& blockHash, double nVerificationProgress, bool header, SynchronizationState sync_state) {
@@ -856,7 +851,7 @@ void SendCoinsDialog::updateSmartFeeLabel()
 {
     if(!model || !model->getOptionsModel())
         return;
-    updateCoinControlState();
+    updateCoinControlState(*m_coin_control);
     m_coin_control->m_feerate.reset(); // Explicitly use only fee estimation rate for smart fee labels
     int returned_target;
     FeeReason reason;
@@ -927,7 +922,7 @@ void SendCoinsDialog::coinControlFeatureChanged(bool checked)
     ui->frameCoinControl->setVisible(checked);
 
     if (!checked && model) { // coin control features disabled
-        m_coin_control = std::make_unique<CCoinControl>(m_coin_control->nCoinType);
+        m_coin_control->SetNull(false);
     }
 
     coinControlUpdateLabels();
@@ -973,7 +968,7 @@ void SendCoinsDialog::coinControlChangeEdited(const QString& text)
         }
         else if (!IsValidDestination(dest)) // Invalid address
         {
-            ui->labelCoinControlChangeLabel->setText(tr("Warning: Invalid Dash address"));
+            ui->labelCoinControlChangeLabel->setText(tr("Warning: Invalid Gryphonmoon address"));
         }
         else // Valid address
         {
@@ -1016,7 +1011,7 @@ void SendCoinsDialog::coinControlUpdateLabels()
     if (!model || !model->getOptionsModel())
         return;
 
-    updateCoinControlState();
+    updateCoinControlState(*m_coin_control);
 
     // set pay amounts
     CoinControlDialog::payAmounts.clear();

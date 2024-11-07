@@ -1,12 +1,10 @@
-// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Copyright (c) 2011-2019 The Bitcoin Core developers
 // Copyright (c) 2014-2022 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <qt/bitcoinunits.h>
 #include <chainparams.h>
-
-#include <consensus/amount.h>
 
 #include <QSettings>
 #include <QStringList>
@@ -24,10 +22,10 @@ BitcoinUnits::BitcoinUnits(QObject *parent):
 QList<BitcoinUnits::Unit> BitcoinUnits::availableUnits()
 {
     QList<BitcoinUnits::Unit> unitlist;
-    unitlist.append(DASH);
-    unitlist.append(mDASH);
-    unitlist.append(uDASH);
-    unitlist.append(duffs);
+    unitlist.append(GRYPHONMOON);
+    unitlist.append(mGRYPHONMOON);
+    unitlist.append(uGRYPHONMOON);
+    unitlist.append(muffs);
     return unitlist;
 }
 
@@ -35,10 +33,10 @@ bool BitcoinUnits::valid(int unit)
 {
     switch(unit)
     {
-    case DASH:
-    case mDASH:
-    case uDASH:
-    case duffs:
+    case GRYPHONMOON:
+    case mGRYPHONMOON:
+    case uGRYPHONMOON:
+    case muffs:
         return true;
     default:
         return false;
@@ -51,10 +49,10 @@ QString BitcoinUnits::name(int unit)
     {
         switch(unit)
         {
-            case DASH: return QString("DASH");
-            case mDASH: return QString("mDASH");
-            case uDASH: return QString::fromUtf8("μDASH");
-            case duffs: return QString("duffs");
+            case GRYPHONMOON: return QString("GRYPM");
+            case mGRYPHONMOON: return QString("mGRYPM");
+            case uGRYPHONMOON: return QString::fromUtf8("μGRYPM");
+            case muffs: return QString("muffs");
             default: return QString("???");
         }
     }
@@ -62,10 +60,10 @@ QString BitcoinUnits::name(int unit)
     {
         switch(unit)
         {
-            case DASH: return QString("tDASH");
-            case mDASH: return QString("mtDASH");
-            case uDASH: return QString::fromUtf8("μtDASH");
-            case duffs: return QString("tduffs");
+            case GRYPHONMOON: return QString("tGRYPM");
+            case mGRYPHONMOON: return QString("mtGRYPM");
+            case uGRYPHONMOON: return QString::fromUtf8("μtGRYPM");
+            case muffs: return QString("tmuffs");
             default: return QString("???");
         }
     }
@@ -77,10 +75,10 @@ QString BitcoinUnits::description(int unit)
     {
         switch(unit)
         {
-            case DASH: return QString("Dash");
-            case mDASH: return QString("Milli-Dash (1 / 1" THIN_SP_UTF8 "000)");
-            case uDASH: return QString("Micro-Dash (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
-            case duffs: return QString("Ten Nano-Dash (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+            case GRYPHONMOON: return QString("Gryphonmoon");
+            case mGRYPHONMOON: return QString("Milli-Gryphonmoon (1 / 1" THIN_SP_UTF8 "000)");
+            case uGRYPHONMOON: return QString("Micro-Gryphonmoon (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+            case muffs: return QString("Ten Nano-Gryphonmoon (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
             default: return QString("???");
         }
     }
@@ -88,10 +86,10 @@ QString BitcoinUnits::description(int unit)
     {
         switch(unit)
         {
-            case DASH: return QString("TestDashs");
-            case mDASH: return QString("Milli-TestDash (1 / 1" THIN_SP_UTF8 "000)");
-            case uDASH: return QString("Micro-TestDash (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
-            case duffs: return QString("Ten Nano-TestDash (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+            case GRYPHONMOON: return QString("TestGryphonmoons");
+            case mGRYPHONMOON: return QString("Milli-TestGryphonmoon (1 / 1" THIN_SP_UTF8 "000)");
+            case uGRYPHONMOON: return QString("Micro-TestGryphonmoon (1 / 1" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
+            case muffs: return QString("Ten Nano-TestGryphonmoon (1 / 100" THIN_SP_UTF8 "000" THIN_SP_UTF8 "000)");
             default: return QString("???");
         }
     }
@@ -101,10 +99,10 @@ qint64 BitcoinUnits::factor(int unit)
 {
     switch(unit)
     {
-    case DASH:  return 100000000;
-    case mDASH: return 100000;
-    case uDASH: return 100;
-    case duffs: return 1;
+    case GRYPHONMOON:  return 100000000;
+    case mGRYPHONMOON: return 100000;
+    case uGRYPHONMOON: return 100;
+    case muffs: return 1;
     default:   return 100000000;
     }
 }
@@ -113,10 +111,10 @@ int BitcoinUnits::decimals(int unit)
 {
     switch(unit)
     {
-    case DASH: return 8;
-    case mDASH: return 5;
-    case uDASH: return 2;
-    case duffs: return 0;
+    case GRYPHONMOON: return 8;
+    case mGRYPHONMOON: return 5;
+    case uGRYPHONMOON: return 2;
+    case muffs: return 0;
     default: return 0;
     }
 }

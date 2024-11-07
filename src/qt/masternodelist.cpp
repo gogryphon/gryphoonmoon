@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 The Dash Core developers
+// Copyright (c) 2016-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -47,7 +47,8 @@ MasternodeList::MasternodeList(QWidget* parent) :
     GUIUtil::setFont({ui->label_filter_2}, GUIUtil::FontWeight::Normal, 15);
 
     int columnAddressWidth = 200;
-    int columnTypeWidth = 160;
+    // Disable EvoNodes
+    // int columnTypeWidth = 160;
     int columnStatusWidth = 80;
     int columnPoSeScoreWidth = 80;
     int columnRegisteredWidth = 80;
@@ -60,7 +61,8 @@ MasternodeList::MasternodeList(QWidget* parent) :
     int columnVotingWidth = 130;
 
     ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_SERVICE, columnAddressWidth);
-    ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_TYPE, columnTypeWidth);
+    // Disable EvoNodes
+    // ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_TYPE, columnTypeWidth);
     ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_STATUS, columnStatusWidth);
     ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_POSE, columnPoSeScoreWidth);
     ui->tableWidgetMasternodesDIP3->setColumnWidth(COLUMN_REGISTERED, columnRegisteredWidth);
@@ -81,12 +83,15 @@ MasternodeList::MasternodeList(QWidget* parent) :
 
     ui->checkBoxMyMasternodesOnly->setEnabled(false);
 
+    QAction* copyProTxHashAction = new QAction(tr("Copy ProTx Hash"), this);
+    QAction* copyCollateralOutpointAction = new QAction(tr("Copy Collateral Outpoint"), this);
     contextMenuDIP3 = new QMenu(this);
-    contextMenuDIP3->addAction(tr("Copy ProTx Hash"), this, &MasternodeList::copyProTxHash_clicked);
-    contextMenuDIP3->addAction(tr("Copy Collateral Outpoint"), this, &MasternodeList::copyCollateralOutpoint_clicked);
-
+    contextMenuDIP3->addAction(copyProTxHashAction);
+    contextMenuDIP3->addAction(copyCollateralOutpointAction);
     connect(ui->tableWidgetMasternodesDIP3, &QTableWidget::customContextMenuRequested, this, &MasternodeList::showContextMenuDIP3);
     connect(ui->tableWidgetMasternodesDIP3, &QTableWidget::doubleClicked, this, &MasternodeList::extraInfoDIP3_clicked);
+    connect(copyProTxHashAction, &QAction::triggered, this, &MasternodeList::copyProTxHash_clicked);
+    connect(copyCollateralOutpointAction, &QAction::triggered, this, &MasternodeList::copyCollateralOutpoint_clicked);
 
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MasternodeList::updateDIP3ListScheduled);
@@ -140,7 +145,7 @@ void MasternodeList::updateDIP3ListScheduled()
     // after filter was last changed unless we want to force the update.
     if (fFilterUpdatedDIP3) {
         int64_t nSecondsToWait = nTimeFilterUpdatedDIP3 - GetTime() + MASTERNODELIST_FILTER_COOLDOWN_SECONDS;
-        ui->countLabelDIP3->setText(tr("Please wait…") + " " + QString::number(nSecondsToWait));
+        ui->countLabelDIP3->setText(tr("Please wait...") + " " + QString::number(nSecondsToWait));
 
         if (nSecondsToWait <= 0) {
             updateDIP3List();
@@ -189,7 +194,7 @@ void MasternodeList::updateDIP3List()
     LOCK(cs_dip3list);
 
     QString strToFilter;
-    ui->countLabelDIP3->setText(tr("Updating…"));
+    ui->countLabelDIP3->setText(tr("Updating..."));
     ui->tableWidgetMasternodesDIP3->setSortingEnabled(false);
     ui->tableWidgetMasternodesDIP3->clearContents();
     ui->tableWidgetMasternodesDIP3->setRowCount(0);
@@ -224,9 +229,9 @@ void MasternodeList::updateDIP3List()
         // Address, Protocol, Status, Active Seconds, Last Seen, Pub Key
         auto addr_key = dmn.pdmnState->addr.GetKey();
         QByteArray addr_ba(reinterpret_cast<const char*>(addr_key.data()), addr_key.size());
-        QTableWidgetItem* addressItem = new CMasternodeListWidgetItem<QByteArray>(
-            QString::fromStdString(dmn.pdmnState->addr.ToStringAddrPort()), addr_ba);
-        QTableWidgetItem* typeItem = new QTableWidgetItem(QString::fromStdString(std::string(GetMnType(dmn.nType).description)));
+        QTableWidgetItem* addressItem = new CMasternodeListWidgetItem<QByteArray>(QString::fromStdString(dmn.pdmnState->addr.ToString()), addr_ba);
+        // Disable EvoNodes
+        // QTableWidgetItem* typeItem = new QTableWidgetItem(QString::fromStdString(std::string(GetMnType(dmn.nType).description)));
         QTableWidgetItem* statusItem = new QTableWidgetItem(dmn.pdmnState->IsBanned() ? tr("POSE_BANNED") : tr("ENABLED"));
         QTableWidgetItem* PoSeScoreItem = new CMasternodeListWidgetItem<int>(QString::number(dmn.pdmnState->nPoSePenalty), dmn.pdmnState->nPoSePenalty);
         QTableWidgetItem* registeredItem = new CMasternodeListWidgetItem<int>(QString::number(dmn.pdmnState->nRegisteredHeight), dmn.pdmnState->nRegisteredHeight);
@@ -281,7 +286,8 @@ void MasternodeList::updateDIP3List()
 
         if (strCurrentFilterDIP3 != "") {
             strToFilter = addressItem->text() + " " +
-                          typeItem->text() + " " +
+                          // Disable EvoNodes
+                          // typeItem->text() + " " +
                           statusItem->text() + " " +
                           PoSeScoreItem->text() + " " +
                           registeredItem->text() + " " +
@@ -298,7 +304,8 @@ void MasternodeList::updateDIP3List()
 
         ui->tableWidgetMasternodesDIP3->insertRow(0);
         ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_SERVICE, addressItem);
-        ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_TYPE, typeItem);
+        // Disable EvoNodes
+        // ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_TYPE, typeItem);
         ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_STATUS, statusItem);
         ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_POSE, PoSeScoreItem);
         ui->tableWidgetMasternodesDIP3->setItem(0, COLUMN_REGISTERED, registeredItem);
@@ -321,7 +328,7 @@ void MasternodeList::on_filterLineEditDIP3_textChanged(const QString& strFilterI
     strCurrentFilterDIP3 = strFilterIn;
     nTimeFilterUpdatedDIP3 = GetTime();
     fFilterUpdatedDIP3 = true;
-    ui->countLabelDIP3->setText(tr("Please wait…") + " " + QString::number(MASTERNODELIST_FILTER_COOLDOWN_SECONDS));
+    ui->countLabelDIP3->setText(tr("Please wait...") + " " + QString::number(MASTERNODELIST_FILTER_COOLDOWN_SECONDS));
 }
 
 void MasternodeList::on_checkBoxMyMasternodesOnly_stateChanged(int state)

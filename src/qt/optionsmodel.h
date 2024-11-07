@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_OPTIONSMODEL_H
 #define BITCOIN_QT_OPTIONSMODEL_H
 
+#include <amount.h>
 #include <qt/guiconstants.h>
 
 #include <cstdint>
@@ -45,7 +46,7 @@ public:
 
     enum OptionID {
         StartAtStartup,       // bool
-        ShowTrayIcon,         // bool
+        HideTrayIcon,         // bool
         MinimizeToTray,       // bool
         MapPortUPnP,          // bool
         MapPortNatpmp,        // bool
@@ -66,7 +67,6 @@ public:
         FontWeightBold,       // int
         Language,             // QString
         CoinControlFeatures,  // bool
-        SubFeeFromAmount,     // bool
         KeepChangeAddress,    // bool
         ThreadsScriptVerif,   // int
         Prune,                // bool
@@ -86,7 +86,6 @@ public:
         CoinJoinDenomsHardCap,// int
         CoinJoinMultiSession, // bool
         Listen,               // bool
-        Server,               // bool
         OptionIDRowCount,
     };
 
@@ -100,13 +99,12 @@ public:
     void setDisplayUnit(const QVariant &value);
 
     /* Explicit getters */
-    bool getShowTrayIcon() const { return m_show_tray_icon; }
+    bool getHideTrayIcon() const { return fHideTrayIcon; }
     bool getMinimizeToTray() const { return fMinimizeToTray; }
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
-    bool getSubFeeFromAmount() const { return m_sub_fee_from_amount; }
     bool getKeepChangeAddress() const { return fKeepChangeAddress; }
     bool getShowAdvancedCJUI() { return fShowAdvancedCJUI; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
@@ -127,14 +125,13 @@ public:
 private:
     interfaces::Node* m_node = nullptr;
     /* Qt-only settings */
-    bool m_show_tray_icon;
+    bool fHideTrayIcon;
     bool fMinimizeToTray;
     bool fMinimizeOnClose;
     QString language;
     int nDisplayUnit;
     QString strThirdPartyTxUrls;
     bool fCoinControlFeatures;
-    bool m_sub_fee_from_amount;
     bool fKeepChangeAddress;
     bool fShowAdvancedCJUI;
     /* settings that were overridden by command-line */
@@ -153,7 +150,7 @@ Q_SIGNALS:
     void AdvancedCJUIChanged(bool);
     void coinControlFeaturesChanged(bool);
     void keepChangeAddressChanged(bool);
-    void showTrayIconChanged(bool);
+    void hideTrayIconChanged(bool);
 };
 
 #endif // BITCOIN_QT_OPTIONSMODEL_H

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -47,13 +47,11 @@ private:
 
 private:
     const std::unique_ptr<db_type> m_db;
-    bool is_valid{false};
+    const bool is_valid{false};
 
 public:
-    explicit CNetFulfilledRequestManager();
+    explicit CNetFulfilledRequestManager(bool load_cache);
     ~CNetFulfilledRequestManager();
-
-    bool LoadCache(bool load_cache);
 
     bool IsValid() const { return is_valid; }
     void CheckAndRemove();
@@ -65,5 +63,7 @@ public:
 
     void DoMaintenance();
 };
+
+extern std::unique_ptr<CNetFulfilledRequestManager> netfulfilledman;
 
 #endif // BITCOIN_NETFULFILLEDMAN_H

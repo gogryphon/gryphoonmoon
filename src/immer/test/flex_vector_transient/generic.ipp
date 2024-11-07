@@ -14,7 +14,7 @@
 
 #include <boost/range/adaptors.hpp>
 #include <boost/range/irange.hpp>
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <algorithm>
 #include <array>
@@ -32,11 +32,6 @@
 #ifndef VECTOR_T
 #error "define the vector template to use in VECTOR_T"
 #endif
-
-IMMER_RANGES_CHECK(
-    std::ranges::random_access_range<FLEX_VECTOR_T<std::string>>);
-IMMER_RANGES_CHECK(
-    std::ranges::random_access_range<FLEX_VECTOR_TRANSIENT_T<std::string>>);
 
 template <typename V = VECTOR_T<unsigned>>
 auto make_test_flex_vector(unsigned min, unsigned max)

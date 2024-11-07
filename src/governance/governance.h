@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,30 +10,25 @@
 
 #include <cachemap.h>
 #include <cachemultimap.h>
-#include <protocol.h>
-#include <util/check.h>
+#include <net_types.h>
 
 #include <optional>
 
 class CBloomFilter;
 class CBlockIndex;
-class CConnman;
 template<typename T>
 class CFlatDB;
 class CInv;
-class PeerManager;
 
-class CDeterministicMNManager;
 class CGovernanceManager;
+class CGovernanceTriggerManager;
 class CGovernanceObject;
 class CGovernanceVote;
-class CMasternodeMetaMan;
-class CMasternodeSync;
-class CNetFulfilledRequestManager;
 class CSporkManager;
 
+extern std::unique_ptr<CGovernanceManager> governance;
+
 static constexpr int RATE_BUFFER_SIZE = 5;
-static constexpr bool DEFAULT_GOVERNANCE_ENABLE{true};
 
 class CDeterministicMNList;
 using CDeterministicMNListPtr = std::shared_ptr<CDeterministicMNList>;
@@ -69,7 +64,7 @@ public:
         fBufferEmpty = false;
     }
 
-    int64_t GetMinTimestamp() const
+    int64_t GetMinTimestamp()
     {
         int nIndex = nDataStart;
         int64_t nMin = std::numeric_limits<int64_t>::max();
@@ -85,7 +80,7 @@ public:
         return nMin;
     }
 
-    int64_t GetMaxTimestamp() const
+    int64_t GetMaxTimestamp()
     {
         int nIndex = nDataStart;
         int64_t nMax = 0;
@@ -112,7 +107,7 @@ public:
         return RATE_BUFFER_SIZE - nDataStart + nDataEnd;
     }
 
-    double GetRate() const
+    double GetRate()
     {
         int nCount = GetCount();
         if (nCount < RATE_BUFFER_SIZE) {
@@ -228,7 +223,28 @@ class CGovernanceManager : public GovernanceStore
     friend class CGovernanceObject;
 
 private:
+    using hash_s_t = std::set<uint256>;
     using db_type = CFlatDB<GovernanceStore>;
+
+    class ScopedLockBool
+    {
+        bool& ref;
+        bool fPrevValue;
+
+    public:
+        ScopedLockBool(RecursiveMutex& _cs, bool& _ref, bool _value) :
+            ref(_ref)
+        {
+            AssertLockHeld(_cs);
+            fPrevValue = ref;
+            ref = _value;
+        }
+
+        ~ScopedLockBool()
+        {
+            ref = fPrevValue;
+        }
+    };
 
 private:
     static const int MAX_TIME_FUTURE_DEVIATION;
@@ -238,26 +254,18 @@ private:
     const std::unique_ptr<db_type> m_db;
     bool is_valid{false};
 
-    CMasternodeMetaMan& m_mn_metaman;
-    CNetFulfilledRequestManager& m_netfulfilledman;
-    const ChainstateManager& m_chainman;
-    const std::unique_ptr<CDeterministicMNManager>& m_dmnman;
-    CMasternodeSync& m_mn_sync;
-
     int64_t nTimeLastDiff;
     // keep track of current block height
     int nCachedBlockHeight;
     std::map<uint256, CGovernanceObject> mapPostponedObjects;
-    std::set<uint256> setAdditionalRelayObjects;
-    std::map<uint256, std::chrono::seconds> m_requested_hash_time;
+    hash_s_t setAdditionalRelayObjects;
+    hash_s_t setRequestedObjects;
+    hash_s_t setRequestedVotes;
     bool fRateChecksEnabled;
     std::optional<uint256> votedFundingYesTriggerHash;
-    std::map<uint256, std::shared_ptr<CSuperblock>> mapTrigger;
 
 public:
-    explicit CGovernanceManager(CMasternodeMetaMan& mn_metaman, CNetFulfilledRequestManager& netfulfilledman,
-                                const ChainstateManager& chainman,
-                                const std::unique_ptr<CDeterministicMNManager>& dmnman, CMasternodeSync& mn_sync);
+    CGovernanceManager();
     ~CGovernanceManager();
 
     bool LoadCache(bool load_cache);
@@ -271,15 +279,13 @@ public:
      */
     bool ConfirmInventoryRequest(const CInv& inv);
 
-    void SyncSingleObjVotes(CNode& peer, PeerManager& peerman, const uint256& nProp, const CBloomFilter& filter, CConnman& connman);
-    PeerMsgRet SyncObjects(CNode& peer, PeerManager& peerman, CConnman& connman) const;
+    void SyncSingleObjVotes(CNode& peer, const uint256& nProp, const CBloomFilter& filter, CConnman& connman);
+    PeerMsgRet SyncObjects(CNode& peer, CConnman& connman) const;
 
-    PeerMsgRet ProcessMessage(CNode& peer, CConnman& connman, PeerManager& peerman, std::string_view msg_type, CDataStream& vRecv);
+    PeerMsgRet ProcessMessage(CNode& peer, CConnman& connman, std::string_view msg_type, CDataStream& vRecv);
 
-private:
     void ResetVotedFundingTrigger();
 
-public:
     void DoMaintenance(CConnman& connman);
 
     const CGovernanceObject* FindConstGovernanceObject(const uint256& nHash) const EXCLUSIVE_LOCKS_REQUIRED(cs);
@@ -291,13 +297,15 @@ public:
     std::vector<CGovernanceVote> GetCurrentVotes(const uint256& nParentHash, const COutPoint& mnCollateralOutpointFilter) const;
     void GetAllNewerThan(std::vector<CGovernanceObject>& objs, int64_t nMoreThanTime) const;
 
-    void AddGovernanceObject(CGovernanceObject& govobj, PeerManager& peerman, const CNode* pfrom = nullptr);
+    void AddGovernanceObject(CGovernanceObject& govobj, CConnman& connman, const CNode* pfrom = nullptr);
 
-    void CheckAndRemove();
+    void UpdateCachesAndClean();
+
+    void CheckAndRemove() { UpdateCachesAndClean(); }
 
     UniValue ToJson() const;
 
-    void UpdatedBlockTip(const CBlockIndex* pindex, CConnman& connman, PeerManager& peerman, const CActiveMasternodeManager* const mn_activeman);
+    void UpdatedBlockTip(const CBlockIndex* pindex, CConnman& connman);
     int64_t GetLastDiffTime() const { return nTimeLastDiff; }
     void UpdateLastDiffTime(int64_t nTimeIn) { nTimeLastDiff = nTimeIn; }
 
@@ -326,9 +334,16 @@ public:
 
     bool MasternodeRateCheck(const CGovernanceObject& govobj, bool fUpdateFailStatus, bool fForce, bool& fRateCheckBypassed);
 
-    bool ProcessVoteAndRelay(const CGovernanceVote& vote, CGovernanceException& exception, CConnman& connman, PeerManager& peerman);
+    bool ProcessVoteAndRelay(const CGovernanceVote& vote, CGovernanceException& exception, CConnman& connman)
+    {
+        bool fOK = ProcessVote(nullptr, vote, exception, connman);
+        if (fOK) {
+            vote.Relay(connman);
+        }
+        return fOK;
+    }
 
-    void CheckPostponedObjects(PeerManager& peerman);
+    void CheckPostponedObjects(CConnman& connman);
 
     bool AreRateChecksEnabled() const
     {
@@ -338,51 +353,14 @@ public:
 
     void InitOnLoad();
 
-    int RequestGovernanceObjectVotes(CNode& peer, CConnman& connman, const PeerManager& peerman) const;
-    int RequestGovernanceObjectVotes(const std::vector<CNode*>& vNodesCopy, CConnman& connman,
-                                     const PeerManager& peerman) const;
-
-    /*
-     * Trigger Management (formerly CGovernanceTriggerManager)
-     *   - Track governance objects which are triggers
-     *   - After triggers are activated and executed, they can be removed
-    */
-    std::vector<std::shared_ptr<CSuperblock>> GetActiveTriggers() const EXCLUSIVE_LOCKS_REQUIRED(cs);
-    bool AddNewTrigger(uint256 nHash) EXCLUSIVE_LOCKS_REQUIRED(cs);
-    void CleanAndRemoveTriggers() EXCLUSIVE_LOCKS_REQUIRED(cs);
-
-    // Superblocks related:
-
-    /**
-     *   Is Superblock Triggered
-     *
-     *   - Does this block have a non-executed and activated trigger?
-     */
-    bool IsSuperblockTriggered(const CDeterministicMNList& tip_mn_list, int nBlockHeight);
-
-    /**
-     *   Get Superblock Payments
-     *
-     *   - Returns payments for superblock
-     */
-    bool GetSuperblockPayments(const CDeterministicMNList& tip_mn_list, int nBlockHeight,
-                               std::vector<CTxOut>& voutSuperblockRet);
-
-    bool IsValidSuperblock(const CChain& active_chain, const CDeterministicMNList& tip_mn_list,
-                           const CTransaction& txNew, int nBlockHeight, CAmount blockReward);
+    int RequestGovernanceObjectVotes(CNode& peer, CConnman& connman) const;
+    int RequestGovernanceObjectVotes(Span<CNode*> vNodesCopy, CConnman& connman) const;
 
 private:
-    void ExecuteBestSuperblock(const CDeterministicMNList& tip_mn_list, int nBlockHeight);
-    bool GetBestSuperblock(const CDeterministicMNList& tip_mn_list, CSuperblock_sptr& pSuperblockRet, int nBlockHeight)
-        EXCLUSIVE_LOCKS_REQUIRED(cs);
-
     std::optional<const CSuperblock> CreateSuperblockCandidate(int nHeight) const;
-    std::optional<const CGovernanceObject> CreateGovernanceTrigger(const std::optional<const CSuperblock>& sb_opt, PeerManager& peerman,
-                                                                   const CActiveMasternodeManager& mn_activeman);
-    void VoteGovernanceTriggers(const std::optional<const CGovernanceObject>& trigger_opt, CConnman& connman, PeerManager& peerman,
-                                const CActiveMasternodeManager& mn_activeman);
-    bool VoteFundingTrigger(const uint256& nHash, const vote_outcome_enum_t outcome, CConnman& connman, PeerManager& peerman,
-                            const CActiveMasternodeManager& mn_activeman);
+    std::optional<const CGovernanceObject> CreateGovernanceTrigger(const std::optional<const CSuperblock>& sb_opt, CConnman& connman);
+    void VoteGovernanceTriggers(const std::optional<const CGovernanceObject>& trigger_opt, CConnman& connman);
+    bool VoteFundingTrigger(const uint256& nHash, const vote_outcome_enum_t outcome, CConnman& connman);
     bool HasAlreadyVotedFundingTrigger() const;
 
     void RequestGovernanceObject(CNode* pfrom, const uint256& nHash, CConnman& connman, bool fUseFilter = false) const;
@@ -394,10 +372,15 @@ private:
 
     bool ProcessVote(CNode* pfrom, const CGovernanceVote& vote, CGovernanceException& exception, CConnman& connman);
 
-    /// Called to indicate a requested object or vote has been received
-    bool AcceptMessage(const uint256& nHash);
+    /// Called to indicate a requested object has been received
+    bool AcceptObjectMessage(const uint256& nHash);
 
-    void CheckOrphanVotes(CGovernanceObject& govobj, PeerManager& peerman);
+    /// Called to indicate a requested vote has been received
+    bool AcceptVoteMessage(const uint256& nHash);
+
+    static bool AcceptMessage(const uint256& nHash, hash_s_t& setHash);
+
+    void CheckOrphanVotes(CGovernanceObject& govobj, CConnman& connman);
 
     void RebuildIndexes();
 
@@ -411,6 +394,6 @@ private:
 
 };
 
-bool AreSuperblocksEnabled(const CSporkManager& sporkman);
+bool AreSuperblocksEnabled(const CSporkManager& sporkManager);
 
 #endif // BITCOIN_GOVERNANCE_GOVERNANCE_H

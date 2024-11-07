@@ -13,7 +13,7 @@
 #include <immer/vector.hpp>
 #include <immer/vector_transient.hpp>
 
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 TEST_CASE("operator==() may return bad result")
 {

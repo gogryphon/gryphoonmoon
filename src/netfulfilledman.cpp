@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,19 +8,20 @@
 #include <shutdown.h>
 #include <util/system.h>
 
-CNetFulfilledRequestManager::CNetFulfilledRequestManager() :
-    m_db{std::make_unique<db_type>("netfulfilled.dat", "magicFulfilledCache")}
-{
-}
+std::unique_ptr<CNetFulfilledRequestManager> netfulfilledman;
 
-bool CNetFulfilledRequestManager::LoadCache(bool load_cache)
+CNetFulfilledRequestManager::CNetFulfilledRequestManager(bool load_cache) :
+    m_db{std::make_unique<db_type>("netfulfilled.dat", "magicFulfilledCache")},
+    is_valid{
+        [&]() -> bool {
+            assert(m_db != nullptr);
+            return load_cache ? m_db->Load(*this) : m_db->Store(*this);
+        }()
+    }
 {
-    assert(m_db != nullptr);
-    is_valid = load_cache ? m_db->Load(*this) : m_db->Store(*this);
     if (is_valid && load_cache) {
         CheckAndRemove();
     }
-    return is_valid;
 }
 
 CNetFulfilledRequestManager::~CNetFulfilledRequestManager()

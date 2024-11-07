@@ -20,7 +20,7 @@ git diff -U0 HEAD~1.. | ./contrib/devtools/clang-format-diff.py -p1 -i -v
 copyright\_header.py
 ====================
 
-Provides utilities for managing copyright headers of `The Dash Core
+Provides utilities for managing copyright headers of `The Gryphonmoon Core
 developers` in repository source files. It has three subcommands:
 
 ```
@@ -83,7 +83,7 @@ A small script to automatically create manpages in ../../doc/man by running the 
 This requires help2man which can be found at: https://www.gnu.org/software/help2man/
 
 With in-tree builds this tool can be run from any directory within the
-repository. To use this tool with out-of-tree builds set `BUILDDIR`. For
+repostitory. To use this tool with out-of-tree builds set `BUILDDIR`. For
 example:
 
 ```bash
@@ -100,7 +100,7 @@ For example:
   ./github-merge.py 3077
 
 (in any git repository) will help you merge pull request #3077 for the
-dashpay/dash repository.
+gogryphon/dash repository.
 
 What it does:
 * Fetch master and the pull request.
@@ -118,9 +118,9 @@ couldn't mess with the sources.
 
 Setup
 ---------
-Configuring the github-merge tool for the Dash Core repository is done in the following way:
+Configuring the github-merge tool for the Gryphonmoon Core repository is done in the following way:
 
-    git config githubmerge.repository dashpay/dash
+    git config githubmerge.repository gogryphon/gryphonmoon
     git config githubmerge.testcmd "make -j4 check" (adapt to whatever you want to use for testing)
     git config --global user.signingkey mykeyid
 
@@ -153,7 +153,7 @@ for further details.
 optimize-pngs.py
 ================
 
-A script to optimize png files in the dash
+A script to optimize png files in the gryphonmoon
 repository (requires pngcrush).
 
 security-check.py and test-security-check.py
@@ -180,10 +180,10 @@ If no errors occur the return value will be 0 and the output will be empty.
 
 If there are any errors the return value will be 1 and output like this will be printed:
 
-    .../64/test_dash: symbol memcpy from unsupported version GLIBC_2.14
-    .../64/test_dash: symbol __fdelt_chk from unsupported version GLIBC_2.15
-    .../64/test_dash: symbol std::out_of_range::~out_of_range() from unsupported version GLIBCXX_3.4.15
-    .../64/test_dash: symbol _ZNSt8__detail15_List_nod from unsupported version GLIBCXX_3.4.15
+    .../64/test_gryphonmoon: symbol memcpy from unsupported version GLIBC_2.14
+    .../64/test_gryphonmoon: symbol __fdelt_chk from unsupported version GLIBC_2.15
+    .../64/test_gryphonmoon: symbol std::out_of_range::~out_of_range() from unsupported version GLIBCXX_3.4.15
+    .../64/test_gryphonmoon: symbol _ZNSt8__detail15_List_nod from unsupported version GLIBCXX_3.4.15
 
 update-translations.py
 ======================

@@ -7,80 +7,33 @@
 
 #include <compat.h>
 #include <net.h>
-#include <net_permissions.h>
-#include <net_processing.h>
-#include <netaddress.h>
-#include <node/connection_types.h>
-#include <node/eviction.h>
-#include <sync.h>
 #include <util/sock.h>
 
-#include <algorithm>
-#include <array>
 #include <cassert>
-#include <chrono>
-#include <cstdint>
 #include <cstring>
-#include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
-
-class FastRandomContext;
-
-template <typename C>
-class Span;
 
 struct ConnmanTestMsg : public CConnman {
     using CConnman::CConnman;
-
-    void SetPeerConnectTimeout(std::chrono::seconds timeout)
-    {
-        m_peer_connect_timeout = timeout;
-    }
-
-    std::vector<CNode*> TestNodes()
-    {
-        LOCK(m_nodes_mutex);
-        return m_nodes;
-    }
-
     void AddTestNode(CNode& node)
     {
-        LOCK(m_nodes_mutex);
-        m_nodes.push_back(&node);
-
-        if (node.IsManualOrFullOutboundConn()) ++m_network_conn_counts[node.addr.GetNetwork()];
+        LOCK(cs_vNodes);
+        vNodes.push_back(&node);
     }
-
     void ClearTestNodes()
     {
-        LOCK(m_nodes_mutex);
-        for (CNode* node : m_nodes) {
+        LOCK(cs_vNodes);
+        for (CNode* node : vNodes) {
             delete node;
         }
-        m_nodes.clear();
+        vNodes.clear();
     }
 
-    void Handshake(CNode& node,
-                   bool successfully_connected,
-                   ServiceFlags remote_services,
-                   ServiceFlags local_services,
-                   int32_t version,
-                   bool relay_txs)
-        EXCLUSIVE_LOCKS_REQUIRED(NetEventsInterface::g_msgproc_mutex);
-
-    void ProcessMessagesOnce(CNode& node) EXCLUSIVE_LOCKS_REQUIRED(NetEventsInterface::g_msgproc_mutex) { m_msgproc->ProcessMessages(&node, flagInterruptMsgProc); }
+    void ProcessMessagesOnce(CNode& node) { m_msgproc->ProcessMessages(&node, flagInterruptMsgProc); }
 
     void NodeReceiveMsgBytes(CNode& node, Span<const uint8_t> msg_bytes, bool& complete) const;
 
-    bool ReceiveMsgFrom(CNode& node, CSerializedNetMsg&& ser_msg) const;
-    void FlushSendBuffer(CNode& node) const;
-
-    bool AlreadyConnectedPublic(const CAddress& addr) { return AlreadyConnectedToAddress(addr); };
-
-    CNode* ConnectNodePublic(PeerManager& peerman, const char* pszDest, ConnectionType conn_type)
-        EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
+    bool ReceiveMsgFrom(CNode& node, CSerializedNetMsg& ser_msg) const;
 };
 
 constexpr ServiceFlags ALL_SERVICE_FLAGS[]{
@@ -90,39 +43,19 @@ constexpr ServiceFlags ALL_SERVICE_FLAGS[]{
     NODE_COMPACT_FILTERS,
     NODE_NETWORK_LIMITED,
     NODE_HEADERS_COMPRESSED,
-    NODE_P2P_V2,
 };
 
 constexpr NetPermissionFlags ALL_NET_PERMISSION_FLAGS[]{
-    NetPermissionFlags::None,
-    NetPermissionFlags::BloomFilter,
-    NetPermissionFlags::Relay,
-    NetPermissionFlags::ForceRelay,
-    NetPermissionFlags::NoBan,
-    NetPermissionFlags::Mempool,
-    NetPermissionFlags::Addr,
-    NetPermissionFlags::Download,
-    NetPermissionFlags::Implicit,
-    NetPermissionFlags::All,
-};
-
-constexpr ConnectionType ALL_CONNECTION_TYPES[]{
-    ConnectionType::INBOUND,
-    ConnectionType::OUTBOUND_FULL_RELAY,
-    ConnectionType::MANUAL,
-    ConnectionType::FEELER,
-    ConnectionType::BLOCK_RELAY,
-    ConnectionType::ADDR_FETCH,
-};
-
-constexpr auto ALL_NETWORKS = std::array{
-    Network::NET_UNROUTABLE,
-    Network::NET_IPV4,
-    Network::NET_IPV6,
-    Network::NET_ONION,
-    Network::NET_I2P,
-    Network::NET_CJDNS,
-    Network::NET_INTERNAL,
+    NetPermissionFlags::PF_NONE,
+    NetPermissionFlags::PF_BLOOMFILTER,
+    NetPermissionFlags::PF_RELAY,
+    NetPermissionFlags::PF_FORCERELAY,
+    NetPermissionFlags::PF_NOBAN,
+    NetPermissionFlags::PF_MEMPOOL,
+    NetPermissionFlags::PF_ADDR,
+    NetPermissionFlags::PF_DOWNLOAD,
+    NetPermissionFlags::PF_ISIMPLICIT,
+    NetPermissionFlags::PF_ALL,
 };
 
 /**
@@ -166,38 +99,9 @@ public:
 
     int Connect(const sockaddr*, socklen_t) const override { return 0; }
 
-    int Bind(const sockaddr*, socklen_t) const override { return 0; }
-
-    int Listen(int) const override { return 0; }
-
-    std::unique_ptr<Sock> Accept(sockaddr* addr, socklen_t* addr_len) const override
-    {
-        if (addr != nullptr) {
-            // Pretend all connections come from 5.5.5.5:6789
-            memset(addr, 0x00, *addr_len);
-            const socklen_t write_len = static_cast<socklen_t>(sizeof(sockaddr_in));
-            if (*addr_len >= write_len) {
-                *addr_len = write_len;
-                sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(addr);
-                addr_in->sin_family = AF_INET;
-                memset(&addr_in->sin_addr, 0x05, sizeof(addr_in->sin_addr));
-                addr_in->sin_port = htons(6789);
-            }
-        }
-        return std::make_unique<StaticContentsSock>("");
-    };
-
     int GetSockOpt(int level, int opt_name, void* opt_val, socklen_t* opt_len) const override
     {
         std::memset(opt_val, 0x0, *opt_len);
-        return 0;
-    }
-
-    int SetSockOpt(int, int, const void*, socklen_t) const override { return 0; }
-
-    int GetSockName(sockaddr* name, socklen_t* name_len) const override
-    {
-        std::memset(name, 0x0, *name_len);
         return 0;
     }
 
@@ -215,7 +119,5 @@ private:
     const std::string m_contents;
     mutable size_t m_consumed;
 };
-
-std::vector<NodeEvictionCandidate> GetRandomNodeEvictionCandidates(int n_candidates, FastRandomContext& random_context);
 
 #endif // BITCOIN_TEST_UTIL_NET_H

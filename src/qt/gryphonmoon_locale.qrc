@@ -1,0 +1,25 @@
+<!DOCTYPE RCC><RCC version="1.0">
+    <qresource prefix="/translations">
+        <file alias="ar">locale/gryphonmoon_ar.qm</file>
+        <file alias="bg">locale/gryphonmoon_bg.qm</file>
+        <file alias="de">locale/gryphonmoon_de.qm</file>
+        <file alias="en">locale/gryphonmoon_en.qm</file>
+        <file alias="es">locale/gryphonmoon_es.qm</file>
+        <file alias="fi">locale/gryphonmoon_fi.qm</file>
+        <file alias="fr">locale/gryphonmoon_fr.qm</file>
+        <file alias="it">locale/gryphonmoon_it.qm</file>
+        <file alias="ja">locale/gryphonmoon_ja.qm</file>
+        <file alias="ko">locale/gryphonmoon_ko.qm</file>
+        <file alias="nl">locale/gryphonmoon_nl.qm</file>
+        <file alias="pl">locale/gryphonmoon_pl.qm</file>
+        <file alias="pt">locale/gryphonmoon_pt.qm</file>
+        <file alias="ro">locale/gryphonmoon_ro.qm</file>
+        <file alias="ru">locale/gryphonmoon_ru.qm</file>
+        <file alias="sk">locale/gryphonmoon_sk.qm</file>
+        <file alias="th">locale/gryphonmoon_th.qm</file>
+        <file alias="tr">locale/gryphonmoon_tr.qm</file>
+        <file alias="vi">locale/gryphonmoon_vi.qm</file>
+        <file alias="zh_CN">locale/gryphonmoon_zh_CN.qm</file>
+        <file alias="zh_TW">locale/gryphonmoon_zh_TW.qm</file>
+    </qresource>
+</RCC>

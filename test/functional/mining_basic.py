@@ -13,7 +13,6 @@ from decimal import Decimal
 
 from test_framework.blocktools import (
     create_coinbase,
-    filter_tip_keys,
     NORMAL_GBT_REQUEST_PARAMS,
     TIME_GENESIS_BLOCK,
 )
@@ -52,20 +51,21 @@ class MiningTest(BitcoinTestFramework):
         self.log.info('Create some old blocks')
         for t in range(TIME_GENESIS_BLOCK, TIME_GENESIS_BLOCK + 200 * 156, 156):
             self.bump_mocktime(156)
-            self.generate(self.nodes[0], 1, sync_fun=self.no_op)
+            self.nodes[0].generate(1)
         mining_info = self.nodes[0].getmininginfo()
         assert_equal(mining_info['blocks'], 200)
         assert_equal(mining_info['currentblocktx'], 0)
         assert_equal(mining_info['currentblocksize'], 1000)
 
         self.log.info('test blockversion')
-        self.restart_node(0, extra_args=[f'-mocktime={t}', '-blockversion=1337'])
+        self.restart_node(0, extra_args=['-mocktime={}'.format(t), '-blockversion=1337'])
         self.connect_nodes(0, 1)
         assert_equal(1337, self.nodes[0].getblocktemplate()['version'])
-        self.restart_node(0, extra_args=[f'-mocktime={t}'])
+        self.restart_node(0, extra_args=['-mocktime={}'.format(t)])
         self.connect_nodes(0, 1)
         assert_equal(VERSIONBITS_TOP_BITS + (1 << VERSIONBITS_DEPLOYMENT_TESTDUMMY_BIT), self.nodes[0].getblocktemplate()['version'])
         self.restart_node(0)
+        # TODO: replace with connect_nodes_bi
         self.connect_nodes(0, 1)
         self.connect_nodes(1, 0)
 
@@ -90,7 +90,7 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['pooledtx'], 0)
 
         # Mine a block to leave initial block download
-        self.generatetoaddress(node, 1, node.get_deterministic_priv_key().address)
+        node.generatetoaddress(1, node.get_deterministic_priv_key().address)
         tmpl = node.getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)
         self.log.info("getblocktemplate: Test capability advertised")
         assert 'proposal' in tmpl['capabilities']
@@ -123,7 +123,6 @@ class MiningTest(BitcoinTestFramework):
         assert_template(node, bad_block, 'bad-cb-missing')
 
         self.log.info("submitblock: Test invalid coinbase transaction")
-        assert_raises_rpc_error(-22, "Block does not start with a coinbase", node.submitblock, CBlock().serialize().hex())
         assert_raises_rpc_error(-22, "Block does not start with a coinbase", node.submitblock, bad_block.serialize().hex())
 
         self.log.info("getblocktemplate: Test truncated final transaction")
@@ -197,6 +196,17 @@ class MiningTest(BitcoinTestFramework):
         block.nTime += 1
         block.solve()
 
+        def filter_tip_keys(chaintips):
+            """
+            Gryphonmoon chaintips rpc returns extra info in each tip (difficulty, chainwork, and
+            forkpoint). Filter down to relevant ones checked in this test.
+            """
+            check_keys = ["hash", "height", "branchlen", "status"]
+            filtered_tips = []
+            for tip in chaintips:
+                filtered_tips.append({k: tip[k] for k in check_keys})
+            return filtered_tips
+
         def chain_tip(b_hash, *, status='headers-only', branchlen=1):
             return {'hash': b_hash, 'height': 202, 'branchlen': branchlen, 'status': status}
         assert chain_tip(block.hash) not in filter_tip_keys(node.getchaintips())
@@ -246,7 +256,7 @@ class MiningTest(BitcoinTestFramework):
         assert chain_tip(block.hash, status='active', branchlen=0) in filter_tip_keys(node.getchaintips())
 
         # Building a few blocks should give the same results
-        self.generatetoaddress(node, 10, node.get_deterministic_priv_key().address)
+        node.generatetoaddress(10, node.get_deterministic_priv_key().address)
         assert_raises_rpc_error(-25, 'time-too-old', lambda: node.submitheader(hexdata=CBlockHeader(bad_block_time).serialize().hex()))
         assert_raises_rpc_error(-25, 'bad-prevblk', lambda: node.submitheader(hexdata=CBlockHeader(bad_block2).serialize().hex()))
         node.submitheader(hexdata=CBlockHeader(block).serialize().hex())

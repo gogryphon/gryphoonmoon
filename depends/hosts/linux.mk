@@ -1,23 +1,13 @@
 linux_CFLAGS=-pipe
-
-ifneq ($(LTO),)
-linux_CFLAGS += -flto
-linux_LDFLAGS += -flto
-endif
-
-linux_CXXFLAGS=$(linux_CFLAGS)
+linux_CXXFLAGS=$(linux_CFLAGS) -static-libstdc++
 
 linux_release_CFLAGS=-O2
 linux_release_CXXFLAGS=$(linux_release_CFLAGS)
 
-linux_debug_CFLAGS=-O1 -g
+linux_debug_CFLAGS=-O1
 linux_debug_CXXFLAGS=$(linux_debug_CFLAGS)
 
-# https://gcc.gnu.org/onlinedocs/libstdc++/manual/debug_mode.html
-linux_debug_CPPFLAGS=-D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
-
-# https://libcxx.llvm.org/Hardening.html
-linux_debug_CPPFLAGS+=-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG
+linux_debug_CPPFLAGS=-D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC -D_LIBCPP_DEBUG=1
 
 ifeq (86,$(findstring 86,$(build_arch)))
 i686_linux_CC=gcc -m32

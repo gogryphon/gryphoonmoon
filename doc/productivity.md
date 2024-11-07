@@ -33,7 +33,7 @@ The easiest way to faster compile times is to cache compiles. `ccache` is a way 
 
 Install `ccache` through your distribution's package manager, and run `./configure` with your normal flags to pick it up.
 
-To use ccache for all your C/C++ projects, follow the symlinks method [here](https://ccache.dev/manual/latest.html#_run_modes) to set it up.
+To use ccache for all your C/C++ projects, follow the symlinks method [here](https://ccache.samba.org/manual/latest.html#_run_modes) to set it up.
 
 To get the most out of ccache, put something like this in `~/.ccache/ccache.conf`:
 
@@ -75,9 +75,9 @@ When rebuilding during development, note that running `make`, without giving a t
 Obviously, it is important to build and run the tests at appropriate times -- but when you just want a quick compile to check your work, consider picking one or a set of build targets relevant to what you're working on, e.g.:
 
 ```sh
-make src/dashd src/dash-cli
-make src/qt/dash-qt
-make -C src dash_bench
+make src/gryphonmoond src/gryphonmoon-cli
+make src/qt/gryphonmoon-qt
+make -C src gryphonmoon_bench
 ```
 
 (You can and should combine this with `-j`, as above, for a parallel build.)

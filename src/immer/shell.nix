@@ -49,7 +49,6 @@ tc.stdenv.mkDerivation rec {
   buildInputs = [
     tc.cc
     git
-    catch2
     cmake
     pkgconfig
     ninja
@@ -59,7 +58,6 @@ tc.stdenv.mkDerivation rec {
     boost
     boehmgc
     fmt
-    valgrind
     benchmarks.c_rrb
     benchmarks.steady
     benchmarks.chunkedseq

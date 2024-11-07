@@ -2,7 +2,7 @@
 
 **Updated for FreeBSD [12.2](https://www.freebsd.org/releases/12.2R/announce.html)**
 
-This guide describes how to build dashd, command-line utilities, and GUI on FreeBSD.
+This guide describes how to build gryphonmoond, command-line utilities, and GUI on FreeBSD.
 
 ## Dependencies
 
@@ -44,10 +44,10 @@ pkg install autoconf automake boost-libs git gmake libevent libtool pkgconf
 
 ```
 
-### 2. Clone Dash Repo
-Now that `git` and all the required dependencies are installed, let's clone the Dash Core repository to a directory. All build scripts and commands will run from this directory.
+### 2. Clone Gryphonmoon Repo
+Now that `git` and all the required dependencies are installed, let's clone the Gryphonmoon Core repository to a directory. All build scripts and commands will run from this directory.
 ``` bash
-git clone https://github.com/dashpay/dash.git
+git clone https://github.com/gogryphon/gryphonmoon.git
 ```
 
 ### 3. Install Optional Dependencies
@@ -59,7 +59,7 @@ pkg install gmp
 ```
 
 #### Wallet Dependencies
-It is not necessary to build wallet functionality to run dashd or the GUI. To enable legacy wallets, you must install `db5`. To enable [descriptor wallets](https://github.com/dashpay/dash/blob/master/doc/descriptors.md), `sqlite3` is required. Skip `db5` if you intend to *exclusively* use descriptor wallets
+It is not necessary to build wallet functionality to run gryphonmoond or the GUI. To enable legacy wallets, you must install `db5`. To enable [descriptor wallets](https://github.com/gogryphon/gryphonmoon/blob/master/doc/descriptors.md), `sqlite3` is required. Skip `db5` if you intend to *exclusively* use descriptor wallets
 
 ###### Legacy Wallet Support
 `db5` is required to enable support for legacy wallets. Skip if you don't intend to use legacy wallets
@@ -79,7 +79,7 @@ pkg install sqlite3
 #### GUI Dependencies
 ###### Qt5
 
-Dash Core includes a GUI built with the cross-platform Qt Framework. To compile the GUI, we need to install `qt5`. Skip if you don't intend to use the GUI.
+Gryphonmoon Core includes a GUI built with the cross-platform Qt Framework. To compile the GUI, we need to install `qt5`. Skip if you don't intend to use the GUI.
 ```bash
 pkg install qt5
 ```
@@ -96,15 +96,15 @@ There is an included test suite that is useful for testing code changes when dev
 To run the test suite (recommended), you will need to have Python 3 installed:
 
 ```bash
-pkg install python3 databases/py-sqlite3
+pkg install python3
 ```
 ---
 
-## Building Dash Core
+## Building Gryphonmoon Core
 
 ### 1. Configuration
 
-There are many ways to configure Dash Core, here are a few common examples:
+There are many ways to configure Gryphonmoon Core, here are a few common examples:
 ##### Wallet (BDB + SQlite) Support, No GUI:
 This explicitly enables legacy wallet support and disables the GUI. If `sqlite3` is installed, then descriptor wallet support will be built.
 ```bash
@@ -131,6 +131,6 @@ This explicitly enables the GUI and disables legacy wallet support. If `qt5` is 
 **Important**: Use `gmake` (the non-GNU `make` will exit with an error).
 
 ```bash
-gmake # use "-j N" for N parallel jobs
+gmake # use -jX here for parallelism
 gmake check # Run tests if Python 3 is available
 ```

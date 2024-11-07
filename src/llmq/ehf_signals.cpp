@@ -15,18 +15,23 @@
 #include <deploymentstatus.h>
 #include <index/txindex.h> // g_txindex
 #include <primitives/transaction.h>
+#include <spork.h>
+#include <txmempool.h>
 #include <validation.h>
 
 namespace llmq {
 
 
-CEHFSignalsHandler::CEHFSignalsHandler(ChainstateManager& chainman, CMNHFManager& mnhfman, CSigningManager& sigman,
-                                       CSigSharesManager& shareman, const CQuorumManager& qman) :
-    m_chainman(chainman),
-    mnhfman(mnhfman),
+CEHFSignalsHandler::CEHFSignalsHandler(CChainState& chainstate, CConnman& connman,
+                                       CSigningManager& sigman, CSigSharesManager& shareman,
+                                       const CSporkManager& sporkman, const CQuorumManager& qman, CTxMemPool& mempool) :
+    chainstate(chainstate),
+    connman(connman),
     sigman(sigman),
     shareman(shareman),
-    qman(qman)
+    sporkman(sporkman),
+    qman(qman),
+    mempool(mempool)
 {
     sigman.RegisterRecoveredSigsListener(this);
 }
@@ -37,15 +42,19 @@ CEHFSignalsHandler::~CEHFSignalsHandler()
     sigman.UnregisterRecoveredSigsListener(this);
 }
 
-void CEHFSignalsHandler::UpdatedBlockTip(const CBlockIndex* const pindexNew, bool is_masternode)
+void CEHFSignalsHandler::UpdatedBlockTip(const CBlockIndex* const pindexNew)
 {
     if (!DeploymentActiveAfter(pindexNew, Params().GetConsensus(), Consensus::DEPLOYMENT_V20)) return;
 
-    if (!is_masternode) {
+    if (!fMasternodeMode || (Params().IsTestChain() && !sporkman.IsSporkActive(SPORK_24_TEST_EHF))) {
         return;
     }
 
-    const auto ehfSignals = mnhfman.GetSignalsStage(pindexNew);
+    if (Params().NetworkIDString() == CBaseChainParams::MAIN) {
+        // TODO: v20 will never attempt to create EHF messages on main net; if this is needed it will be done by v20.1 or v21 nodes
+        return;
+    }
+    const auto ehfSignals = chainstate.GetMNHFSignalsStage(pindexNew);
     for (const auto& deployment : Params().GetConsensus().vDeployments) {
         // Skip deployments that do not use dip0023
         if (!deployment.useEHF) continue;
@@ -75,7 +84,7 @@ void CEHFSignalsHandler::trySignEHFSignal(int bit, const CBlockIndex* const pind
         return;
     }
 
-    const auto quorum = llmq::SelectQuorumForSigning(llmq_params_opt.value(), m_chainman.ActiveChain(), qman, requestId);
+    const auto quorum = llmq::SelectQuorumForSigning(llmq_params_opt.value(), qman, requestId);
     if (!quorum) {
         LogPrintf("CEHFSignalsHandler::trySignEHFSignal no quorum for id=%s\n", requestId.ToString());
         return;
@@ -86,22 +95,25 @@ void CEHFSignalsHandler::trySignEHFSignal(int bit, const CBlockIndex* const pind
     const uint256 msgHash = mnhfPayload.PrepareTx().GetHash();
 
     WITH_LOCK(cs, ids.insert(requestId));
-    sigman.AsyncSignIfMember(llmqType, shareman, requestId, msgHash, quorum->qc->quorumHash, false, true);
+    sigman.AsyncSignIfMember(llmqType, shareman, requestId, msgHash);
 }
 
-MessageProcessingResult CEHFSignalsHandler::HandleNewRecoveredSig(const CRecoveredSig& recoveredSig)
+void CEHFSignalsHandler::HandleNewRecoveredSig(const CRecoveredSig& recoveredSig)
 {
+    if (Params().NetworkIDString() == CBaseChainParams::MAIN) {
+        // TODO: v20 will never attempt to create EHF messages on main net; if this is needed it will be done by v20.1 or v21 nodes
+        return;
+    }
     if (g_txindex) {
         g_txindex->BlockUntilSyncedToCurrentChain();
     }
 
     if (WITH_LOCK(cs, return ids.find(recoveredSig.getId()) == ids.end())) {
         // Do nothing, it's not for this handler
-        return {};
+        return;
     }
 
-    MessageProcessingResult ret;
-    const auto ehfSignals = mnhfman.GetSignalsStage(WITH_LOCK(cs_main, return m_chainman.ActiveTip()));
+    const auto ehfSignals = chainstate.GetMNHFSignalsStage(WITH_LOCK(cs_main, return chainstate.m_chain.Tip()));
     MNHFTxPayload mnhfPayload;
     for (const auto& deployment : Params().GetConsensus().vDeployments) {
         // skip deployments that do not use dip0023 or that have already been mined
@@ -124,15 +136,14 @@ MessageProcessingResult CEHFSignalsHandler::HandleNewRecoveredSig(const CRecover
             CTransactionRef tx_to_sent = MakeTransactionRef(std::move(tx));
             LogPrintf("CEHFSignalsHandler::HandleNewRecoveredSig Special EHF TX is created hash=%s\n", tx_to_sent->GetHash().ToString());
             LOCK(cs_main);
-            const MempoolAcceptResult result = m_chainman.ProcessTransaction(tx_to_sent);
+            const MempoolAcceptResult result = AcceptToMemoryPool(chainstate, mempool, tx_to_sent, /* bypass_limits */ false);
             if (result.m_result_type == MempoolAcceptResult::ResultType::VALID) {
-                ret.m_transactions.push_back(tx_to_sent->GetHash());
+                connman.RelayTransaction(*tx_to_sent);
             } else {
                 LogPrintf("CEHFSignalsHandler::HandleNewRecoveredSig -- AcceptToMemoryPool failed: %s\n", result.m_state.ToString());
             }
         }
         break;
     }
-    return ret;
 }
 } // namespace llmq

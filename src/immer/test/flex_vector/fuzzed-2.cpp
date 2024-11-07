@@ -8,7 +8,7 @@
 
 #include "extra/fuzzer/fuzzer_input.hpp"
 #include <array>
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 #include <immer/flex_vector.hpp>
 #include <iostream>
 
@@ -172,7 +172,7 @@ TEST_CASE("bug: use after free on move-take")
         var0      = std::move(var0).take(68);
     }
 
-#ifndef IMMER_DISABLE_FUZZER_DUE_TO_GCC_BUG
+#if __GNUC__ != 9 && __GNUC__ != 8
     SECTION("")
     {
         constexpr std::uint8_t input[] = {

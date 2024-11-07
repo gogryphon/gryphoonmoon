@@ -69,14 +69,12 @@ private:
     Mutex cs;
     std::condition_variable cond GUARDED_BY(cs);
     std::deque<std::unique_ptr<WorkItem>> queue GUARDED_BY(cs);
-    std::deque<std::unique_ptr<WorkItem>> external_queue GUARDED_BY(cs);
     bool running GUARDED_BY(cs);
     const size_t maxDepth;
-    const size_t m_external_depth;
 
 public:
-    explicit WorkQueue(size_t _maxDepth, size_t external_depth) : running(true),
-                                 maxDepth(_maxDepth), m_external_depth(external_depth)
+    explicit WorkQueue(size_t _maxDepth) : running(true),
+                                 maxDepth(_maxDepth)
     {
     }
     /** Precondition: worker threads have all stopped (they have been joined).
@@ -85,47 +83,35 @@ public:
     {
     }
     /** Enqueue a work item */
-    bool Enqueue(WorkItem* item, bool is_external) EXCLUSIVE_LOCKS_REQUIRED(!cs)
+    bool Enqueue(WorkItem* item)
     {
         LOCK(cs);
-        if (!running) {
+        if (!running || queue.size() >= maxDepth) {
             return false;
         }
-        if (is_external) {
-            if (external_queue.size() >= m_external_depth) return false;
-            external_queue.emplace_back(std::unique_ptr<WorkItem>(item));
-        } else {
-            if (queue.size() >= maxDepth) return false;
-            queue.emplace_back(std::unique_ptr<WorkItem>(item));
-        }
+        queue.emplace_back(std::unique_ptr<WorkItem>(item));
         cond.notify_one();
         return true;
     }
     /** Thread function */
-    void Run() EXCLUSIVE_LOCKS_REQUIRED(!cs)
+    void Run()
     {
         while (true) {
             std::unique_ptr<WorkItem> i;
             {
                 WAIT_LOCK(cs, lock);
-                while (running && external_queue.empty() && queue.empty())
+                while (running && queue.empty())
                     cond.wait(lock);
-                if (!running && external_queue.empty() && queue.empty())
+                if (!running && queue.empty())
                     break;
-                if (!queue.empty()) {
-                    i = std::move(queue.front());
-                    queue.pop_front();
-                } else {
-                    i = std::move(external_queue.front());
-                    external_queue.pop_front();
-                    LogPrintf("HTTP: Calling handler for external user...\n");
-                }
+                i = std::move(queue.front());
+                queue.pop_front();
             }
             (*i)();
         }
     }
     /** Interrupt and exit loops */
-    void Interrupt() EXCLUSIVE_LOCKS_REQUIRED(!cs)
+    void Interrupt()
     {
         LOCK(cs);
         running = false;
@@ -154,8 +140,6 @@ static struct evhttp* eventHTTP = nullptr;
 static std::vector<CSubNet> rpc_allow_subnets;
 //! Work queue for handling longer requests off the event loop thread
 static std::unique_ptr<WorkQueue<HTTPClosure>> g_work_queue{nullptr};
-//! List of 'external' RPC users (global variable, used by httprpc)
-std::vector<std::string> g_external_usernames;
 //! Handlers for (sub)paths
 static std::vector<HTTPPathHandler> pathHandlers;
 //! Bound listening sockets
@@ -176,8 +160,12 @@ static bool ClientAllowed(const CNetAddr& netaddr)
 static bool InitHTTPAllowList()
 {
     rpc_allow_subnets.clear();
-    rpc_allow_subnets.push_back(CSubNet{LookupHost("127.0.0.1", false).value(), 8});  // always allow IPv4 local subnet
-    rpc_allow_subnets.push_back(CSubNet{LookupHost("::1", false).value()});  // always allow IPv6 localhost
+    CNetAddr localv4;
+    CNetAddr localv6;
+    LookupHost("127.0.0.1", localv4, false);
+    LookupHost("::1", localv6, false);
+    rpc_allow_subnets.push_back(CSubNet(localv4, 8));      // always allow IPv4 local subnet
+    rpc_allow_subnets.push_back(CSubNet(localv6));         // always allow IPv6 localhost
     for (const std::string& strAllow : gArgs.GetArgs("-rpcallowip")) {
         CSubNet subnet;
         LookupSubNet(strAllow, subnet);
@@ -202,16 +190,19 @@ std::string RequestMethodString(HTTPRequest::RequestMethod m)
     switch (m) {
     case HTTPRequest::GET:
         return "GET";
+        break;
     case HTTPRequest::POST:
         return "POST";
+        break;
     case HTTPRequest::HEAD:
         return "HEAD";
+        break;
     case HTTPRequest::PUT:
         return "PUT";
-    case HTTPRequest::UNKNOWN:
+        break;
+    default:
         return "unknown";
-    } // no default case, so the compiler can warn about missing cases
-    assert(false);
+    }
 }
 
 /** HTTP request callback */
@@ -232,7 +223,7 @@ static void http_request_cb(struct evhttp_request* req, void* arg)
     // Early address-based allow check
     if (!ClientAllowed(hreq->GetPeer())) {
         LogPrint(BCLog::HTTP, "HTTP request from %s rejected: Client network is not allowed RPC access\n",
-                 hreq->GetPeer().ToStringAddrPort());
+                 hreq->GetPeer().ToString());
         hreq->WriteReply(HTTP_FORBIDDEN);
         return;
     }
@@ -240,13 +231,13 @@ static void http_request_cb(struct evhttp_request* req, void* arg)
     // Early reject unknown HTTP methods
     if (hreq->GetRequestMethod() == HTTPRequest::UNKNOWN) {
         LogPrint(BCLog::HTTP, "HTTP request from %s rejected: Unknown HTTP request method\n",
-                 hreq->GetPeer().ToStringAddrPort());
+                 hreq->GetPeer().ToString());
         hreq->WriteReply(HTTP_BAD_METHOD);
         return;
     }
 
     LogPrint(BCLog::HTTP, "Received a %s request for %s from %s\n",
-             RequestMethodString(hreq->GetRequestMethod()), SanitizeString(hreq->GetURI(), SAFE_CHARS_URI).substr(0, 100), hreq->GetPeer().ToStringAddrPort());
+             RequestMethodString(hreq->GetRequestMethod()), SanitizeString(hreq->GetURI(), SAFE_CHARS_URI).substr(0, 100), hreq->GetPeer().ToString());
 
     // Find registered handler for prefix
     std::string strURI = hreq->GetURI();
@@ -264,39 +255,16 @@ static void http_request_cb(struct evhttp_request* req, void* arg)
             break;
         }
     }
-    const bool is_external_request = [&hreq]() -> bool {
-        if (g_external_usernames.empty()) return false;
-
-        const std::string strAuth = hreq->GetHeader("authorization").second;
-        if (strAuth.substr(0, 6) != "Basic ")
-            return false;
-
-        std::string strUserPass64 = TrimString(strAuth.substr(6));
-        bool invalid;
-        std::string strUserPass = DecodeBase64(strUserPass64, &invalid);
-        if (invalid) return false;
-
-        if (strUserPass.find(':') == std::string::npos) return false;
-        const std::string username{strUserPass.substr(0, strUserPass.find(':'))};
-        return find(g_external_usernames.begin(), g_external_usernames.end(), username) != g_external_usernames.end();
-    }();
 
     // Dispatch to worker thread
     if (i != iend) {
         auto item{std::make_unique<HTTPWorkItem>(std::move(hreq), path, i->handler)};
         assert(g_work_queue);
-
-        if (g_work_queue->Enqueue(item.get(), is_external_request)) {
+        if (g_work_queue->Enqueue(item.get())) {
             item.release(); /* if true, queue took ownership */
         } else {
-            if (is_external_request)
-            {
-                LogPrintf("WARNING: request rejected because http work queue depth of externals exceeded, it can be increased with the -rpcexternalworkqueue= setting\n");
-                item->req->WriteReply(HTTP_SERVICE_UNAVAILABLE, "Work queue depth of externals exceeded");
-            } else {
-                LogPrintf("WARNING: request rejected because http work queue depth exceeded, it can be increased with the -rpcworkqueue= setting\n");
-                item->req->WriteReply(HTTP_SERVICE_UNAVAILABLE, "Work queue depth exceeded");
-            }
+            LogPrintf("WARNING: request rejected because http work queue depth exceeded, it can be increased with the -rpcworkqueue= setting\n");
+            item->req->WriteReply(HTTP_SERVICE_UNAVAILABLE, "Work queue depth exceeded");
         }
     } else {
         hreq->WriteReply(HTTP_NOT_FOUND);
@@ -311,13 +279,14 @@ static void http_reject_request_cb(struct evhttp_request* req, void*)
 }
 
 /** Event dispatcher thread */
-static void ThreadHTTP(struct event_base* base)
+static bool ThreadHTTP(struct event_base* base)
 {
     util::ThreadRename("http");
     LogPrint(BCLog::HTTP, "Entering http event loop\n");
     event_base_dispatch(base);
     // Event loop will be interrupted by InterruptHTTPServer()
     LogPrint(BCLog::HTTP, "Exited http event loop\n");
+    return event_base_got_break(base) == 0;
 }
 
 /** Bind HTTP server to specified addresses */
@@ -353,8 +322,8 @@ static bool HTTPBindAddresses(struct evhttp* http)
         LogPrintf("Binding RPC on address %s port %i\n", i->first, i->second);
         evhttp_bound_socket *bind_handle = evhttp_bind_socket_with_handle(http, i->first.empty() ? nullptr : i->first.c_str(), i->second);
         if (bind_handle) {
-            const std::optional<CNetAddr> addr{LookupHost(i->first, false)};
-            if (i->first.empty() || (addr.has_value() && addr->IsBindAny())) {
+            CNetAddr addr;
+            if (i->first.empty() || (LookupHost(i->first, addr, false) && addr.IsBindAny())) {
                 LogPrintf("WARNING: the RPC server is not safe to expose to untrusted networks such as the public internet\n");
             }
             boundSockets.push_back(bind_handle);
@@ -424,13 +393,9 @@ bool InitHTTPServer()
 
     LogPrint(BCLog::HTTP, "Initialized HTTP server\n");
     int workQueueDepth = std::max((long)gArgs.GetArg("-rpcworkqueue", DEFAULT_HTTP_WORKQUEUE), 1L);
-    int workQueueDepthExternal = 0;
-    if (const std::string rpc_externaluser{gArgs.GetArg("-rpcexternaluser", "")}; !rpc_externaluser.empty()) {
-        workQueueDepthExternal = std::max((long)gArgs.GetArg("-rpcexternalworkqueue", DEFAULT_HTTP_WORKQUEUE), 1L);
-        g_external_usernames = SplitString(rpc_externaluser, ',');
-    }
-    LogPrintf("HTTP: creating work queue of depth %d external_depth %d\n", workQueueDepth, workQueueDepthExternal);
-    g_work_queue = std::make_unique<WorkQueue<HTTPClosure>>(workQueueDepth, workQueueDepthExternal);
+    LogPrintf("HTTP: creating work queue of depth %d\n", workQueueDepth);
+
+    g_work_queue = std::make_unique<WorkQueue<HTTPClosure>>(workQueueDepth);
     // transfer ownership to eventBase/HTTP via .release()
     eventBase = base_ctr.release();
     eventHTTP = http_ctr.release();
@@ -658,14 +623,19 @@ HTTPRequest::RequestMethod HTTPRequest::GetRequestMethod() const
     switch (evhttp_request_get_command(req)) {
     case EVHTTP_REQ_GET:
         return GET;
+        break;
     case EVHTTP_REQ_POST:
         return POST;
+        break;
     case EVHTTP_REQ_HEAD:
         return HEAD;
+        break;
     case EVHTTP_REQ_PUT:
         return PUT;
+        break;
     default:
         return UNKNOWN;
+        break;
     }
 }
 

@@ -13,12 +13,12 @@
 #include <immer/heap/gc_heap.hpp>
 #include <immer/refcount/no_refcount_policy.hpp>
 
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #define IMMER_FUZZED_TRACE_ENABLE 0
 
 #if IMMER_FUZZED_TRACE_ENABLE
-#include <fmt/ostream.h>
+#include <fmt/printf.h>
 #define IMMER_FUZZED_TRACE(...) fmt::print(std::cerr, __VA_ARGS__)
 #else
 #define IMMER_FUZZED_TRACE(...)

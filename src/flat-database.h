@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -36,7 +36,7 @@ private:
     std::string strFilename;
     std::string strMagicMessage;
 
-    [[nodiscard]] bool CoreWrite(const T& objToSave)
+    bool CoreWrite(const T& objToSave)
     {
         // LOCK(objToSave.cs);
 
@@ -51,11 +51,10 @@ private:
         ssObj << hash;
 
         // open output file, and associate with CAutoFile
-        FILE *file = fsbridge::fopen(pathDB, "wb");
+        FILE *file = fopen(pathDB.string().c_str(), "wb");
         CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
-        if (fileout.IsNull()) {
-            return error("%s: Failed to open file %s", __func__, fs::PathToString(pathDB));
-        }
+        if (fileout.IsNull())
+            return error("%s: Failed to open file %s", __func__, pathDB.string());
 
         // Write and commit header, data
         try {
@@ -72,16 +71,17 @@ private:
         return true;
     }
 
-    [[nodiscard]] ReadResult CoreRead(T& objToLoad)
+    ReadResult CoreRead(T& objToLoad)
     {
         //LOCK(objToLoad.cs);
 
         int64_t nStart = GetTimeMillis();
         // open input file, and associate with CAutoFile
-        FILE *file = fsbridge::fopen(pathDB, "rb");
+        FILE *file = fopen(pathDB.string().c_str(), "rb");
         CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
-        if (filein.IsNull()) {
-            // It is not actually error, maybe it's a first initialization of core.
+        if (filein.IsNull())
+        {
+            error("%s: Failed to open file %s", __func__, pathDB.string());
             return FileError;
         }
 
@@ -117,9 +117,9 @@ private:
         }
 
 
+        unsigned char pchMsgTmp[4];
+        std::string strMagicMessageTmp;
         try {
-            unsigned char pchMsgTmp[4];
-            std::string strMagicMessageTmp;
             // de-serialize file header (file specific magic message) and ..
             ssObj >> strMagicMessageTmp;
 
@@ -156,14 +156,14 @@ private:
         return Ok;
     }
 
-    [[nodiscard]] bool Read(T& objToLoad)
+    bool Read(T& objToLoad)
     {
         ReadResult readResult = CoreRead(objToLoad);
         if (readResult == FileError)
             LogPrintf("Missing file %s, will try to recreate\n", strFilename);
         else if (readResult != Ok)
         {
-            LogPrintf("ERROR: CFlatDB::Read Error reading %s: ", strFilename);
+            LogPrintf("Error reading %s: ", strFilename);
             if(readResult == IncorrectFormat)
             {
                 LogPrintf("%s: Magic is ok but data has invalid format, will try to recreate\n", __func__);
@@ -178,20 +178,20 @@ private:
     }
 
 public:
-    CFlatDB(std::string&& strFilenameIn, std::string&& strMagicMessageIn) :
-        pathDB{gArgs.GetDataDirNet() / strFilenameIn},
-        strFilename{strFilenameIn},
-        strMagicMessage{strMagicMessageIn}
+    CFlatDB(std::string strFilenameIn, std::string strMagicMessageIn)
     {
+        pathDB = GetDataDir() / strFilenameIn;
+        strFilename = strFilenameIn;
+        strMagicMessage = strMagicMessageIn;
     }
 
-    [[nodiscard]] bool Load(T& objToLoad)
+    bool Load(T& objToLoad)
     {
         LogPrintf("Reading info from %s...\n", strFilename);
         return Read(objToLoad);
     }
 
-    bool Store(const T& objToSave)
+    bool Store(T& objToSave)
     {
         LogPrintf("Verifying %s format...\n", strFilename);
         T tmpObjToLoad;
@@ -200,10 +200,10 @@ public:
         int64_t nStart = GetTimeMillis();
 
         LogPrintf("Writing info to %s...\n", strFilename);
-        const bool ret = CoreWrite(objToSave);
+        CoreWrite(objToSave);
         LogPrintf("%s dump finished  %dms\n", strFilename, GetTimeMillis() - nStart);
 
-        return ret;
+        return true;
     }
 };
 

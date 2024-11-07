@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2024 The Dash Core developers
+# Copyright (c) 2020-2023 The Dash Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.messages import CTransaction, from_hex, hash256, ser_compact_size, ser_string
-from test_framework.test_framework import DashTestFramework
+from test_framework.messages import CTransaction, FromHex, hash256, ser_compact_size, ser_string
+from test_framework.test_framework import GryphonmoonTestFramework
 from test_framework.util import assert_raises_rpc_error, satoshi_round
 
 '''
@@ -14,13 +14,13 @@ Test verifyislock rpc
 
 '''
 
-class RPCVerifyISLockTest(DashTestFramework):
+class RPCVerifyISLockTest(GryphonmoonTestFramework):
     def set_test_params(self):
         # -whitelist is needed to avoid the trickling logic on node0
-        self.set_dash_test_params(6, 5, [["-whitelist=127.0.0.1"], [], [], [], [], []])
+        self.set_gryphonmoon_test_params(6, 5, [["-whitelist=127.0.0.1"], [], [], [], [], []], fast_dip3_enforcement=True)
 
     def get_request_id(self, tx_hex):
-        tx = from_hex(CTransaction(), tx_hex)
+        tx = FromHex(CTransaction(), tx_hex)
 
         request_id_buf = ser_string(b"islock") + ser_compact_size(len(tx.vin))
         for txin in tx.vin:
@@ -44,7 +44,8 @@ class RPCVerifyISLockTest(DashTestFramework):
 
         self.mine_cycle_quorum(llmq_type_name='llmq_test_dip0024', llmq_type=103)
         self.bump_mocktime(1)
-        self.generate(self.nodes[0], 8, sync_fun=self.sync_blocks())
+        self.nodes[0].generate(8)
+        self.sync_blocks()
 
         txid = node.sendtoaddress(node.getnewaddress(), 1)
         self.wait_for_instantlock(txid, node)
@@ -56,7 +57,7 @@ class RPCVerifyISLockTest(DashTestFramework):
         assert node.verifyislock(request_id, txid, rec_sig)
         # Not mined, should use maxHeight
         assert not node.verifyislock(request_id, txid, rec_sig, 1)
-        self.generate(node, 1, sync_fun=self.no_op)
+        node.generate(1)
         assert txid not in node.getrawmempool()
         # Mined but at higher height, should use maxHeight
         assert not node.verifyislock(request_id, txid, rec_sig, 1)

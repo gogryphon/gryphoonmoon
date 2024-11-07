@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Name=Gryphonmoon Core
+Comment=Gryphonmoon P2P Cryptocurrency
+Comment[de]=Verbinde mit dem Gryphonmoon peer-to-peer Netzwerk
+Comment[fr]=Gryphonmoon, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=Gryphonmoon, eşten eşe kriptografik sanal para birimi
+Exec=gryphonmoon-qt %u
+Terminal=false
+Type=Application
+Icon=gryphonmoon128
+MimeType=x-scheme-handler/gryphonmoon;
+Categories=Office;Finance;P2P;Network;Qt;
+StartupWMClass=Gryphonmoon-qt

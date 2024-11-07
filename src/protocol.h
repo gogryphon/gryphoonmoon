@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,9 +16,6 @@
 #include <streams.h>
 #include <uint256.h>
 #include <version.h>
-
-#include <util/expected.h>
-
 
 #include <limits>
 #include <stdint.h>
@@ -42,7 +39,7 @@ public:
     static constexpr size_t HEADER_SIZE = MESSAGE_START_SIZE + COMMAND_SIZE + MESSAGE_SIZE_SIZE + CHECKSUM_SIZE;
     typedef unsigned char MessageStartChars[MESSAGE_START_SIZE];
 
-    explicit CMessageHeader() = default;
+    explicit CMessageHeader();
 
     /** Construct a P2P message header from message-start characters, a command and the size of the message.
      * @note Passing in a `pszCommand` longer than COMMAND_SIZE will result in a run-time assertion error.
@@ -54,10 +51,10 @@ public:
 
     SERIALIZE_METHODS(CMessageHeader, obj) { READWRITE(obj.pchMessageStart, obj.pchCommand, obj.nMessageSize, obj.pchChecksum); }
 
-    char pchMessageStart[MESSAGE_START_SIZE]{};
-    char pchCommand[COMMAND_SIZE]{};
+    char pchMessageStart[MESSAGE_START_SIZE];
+    char pchCommand[COMMAND_SIZE];
     uint32_t nMessageSize{std::numeric_limits<uint32_t>::max()};
-    uint8_t pchChecksum[CHECKSUM_SIZE]{};
+    uint8_t pchChecksum[CHECKSUM_SIZE];
 };
 
 /**
@@ -254,14 +251,8 @@ extern const char* GETCFCHECKPT;
  * evenly spaced filter headers for blocks on the requested chain.
  */
 extern const char* CFCHECKPT;
-/**
- * Contains a 4-byte version number and an 8-byte salt.
- * The salt is used to compute short txids needed for efficient
- * txreconciliation, as described by BIP 330.
- */
-extern const char* SENDTXRCNCL;
 
-// Dash message types
+// Gryphonmoon message types
 // NOTE: do NOT declare non-implmented here, we don't want them to be exposed to the outside
 // TODO: add description
 extern const char* SPORK;
@@ -318,10 +309,10 @@ enum ServiceFlags : uint64_t {
     // Nothing
     NODE_NONE = 0,
     // NODE_NETWORK means that the node is capable of serving the complete block chain. It is currently
-    // set by all Dash Core non pruned nodes, and is unset by SPV clients or other light clients.
+    // set by all Gryphonmoon Core non pruned nodes, and is unset by SPV clients or other light clients.
     NODE_NETWORK = (1 << 0),
     // NODE_BLOOM means the node is capable and willing to handle bloom-filtered connections.
-    // Dash Core nodes used to support this by default, without advertising this bit,
+    // Gryphonmoon Core nodes used to support this by default, without advertising this bit,
     // but no longer do as of protocol version 70201 (= NO_BLOOM_VERSION)
     NODE_BLOOM = (1 << 2),
     // NODE_COMPACT_FILTERS means the node will service basic block filter requests.
@@ -333,9 +324,6 @@ enum ServiceFlags : uint64_t {
     NODE_NETWORK_LIMITED = (1 << 10),
     // description will be provided
     NODE_HEADERS_COMPRESSED = (1 << 11),
-
-    // NODE_P2P_V2 means the node supports BIP324 transport
-    NODE_P2P_V2 = (1 << 12),
 
     // Bits 24-31 are reserved for temporary experiments. Just pick a bit that
     // isn't getting used, or one not being used much, and notify the
@@ -443,6 +431,7 @@ public:
         // ambiguous what that would mean. Make sure no code relying on that is introduced:
         assert(!(s.GetType() & SER_GETHASH));
         bool use_v2;
+        bool store_time;
         if (s.GetType() & SER_DISK) {
             // In the disk serialization format, the encoding (v1 or v2) is determined by a flag version
             // that's part of the serialization itself. ADDRV2_FORMAT in the stream version only determines
@@ -459,16 +448,24 @@ public:
             } else {
                 throw std::ios_base::failure("Unsupported CAddress disk format version");
             }
+            store_time = true;
         } else {
             // In the network serialization format, the encoding (v1 or v2) is determined directly by
             // the value of ADDRV2_FORMAT in the stream version, as no explicitly encoded version
             // exists in the stream.
             assert(s.GetType() & SER_NETWORK);
             use_v2 = s.GetVersion() & ADDRV2_FORMAT;
+            // The only time we serialize a CAddress object without nTime is in
+            // the initial VERSION messages which contain two CAddress records.
+            // At that point, the serialization version is INIT_PROTO_VERSION.
+            // After the version handshake, serialization version is >=
+            // MIN_PEER_PROTO_VERSION and all ADDR messages are serialized with
+            // nTime.
+            store_time = s.GetVersion() != INIT_PROTO_VERSION;
         }
 
         SER_READ(obj, obj.nTime = TIME_INIT);
-        READWRITE(obj.nTime);
+        if (store_time) READWRITE(obj.nTime);
         // nServices is serialized as CompactSize in V2; as uint64_t in V1.
         if (use_v2) {
             uint64_t services_tmp;
@@ -483,7 +480,7 @@ public:
         SerReadWriteMany(os, ser_action, ReadWriteAsHelper<CService>(obj));
     }
 
-    //! Always included in serialization.
+    //! Always included in serialization, except in the network format on INIT_PROTO_VERSION.
     uint32_t nTime{TIME_INIT};
     //! Serialized as uint64_t in V1, and as CompactSize in V2.
     ServiceFlags nServices{NODE_NONE};
@@ -506,12 +503,12 @@ enum GetDataMsg : uint32_t {
     MSG_BLOCK = 2,
     // The following can only occur in getdata. Invs always use TX or BLOCK.
     MSG_FILTERED_BLOCK = 3,                           //!< Defined in BIP37
-    // Dash message types
+    // Gryphonmoon message types
     // NOTE: we must keep this enum consistent and backwards compatible
     /* MSG_LEGACY_TXLOCK_REQUEST = 4, */              // Legacy InstantSend and not used anymore
     /* MSG_TXLOCK_VOTE = 5, */                        // Legacy InstantSend and not used anymore
     MSG_SPORK = 6,
-    /* 7 - 15 were used in old Dash versions and were mainly budget and MN broadcast/ping related*/
+    /* 7 - 15 were used in old Gryphonmoon versions and were mainly budget and MN broadcast/ping related*/
     MSG_DSTX = 16,
     MSG_GOVERNANCE_OBJECT = 17,
     MSG_GOVERNANCE_OBJECT_VOTE = 18,
@@ -530,7 +527,6 @@ enum GetDataMsg : uint32_t {
     MSG_CLSIG = 29,
     /* MSG_ISLOCK = 30, */                            // Non-deterministic InstantSend and not used anymore
     MSG_ISDLOCK = 31,
-    MSG_DSQ = 32,
 };
 
 /** inv message data */
@@ -573,57 +569,5 @@ public:
     uint256 hash;
 };
 
-struct MisbehavingError
-{
-    int score;
-    std::string message;
-
-    MisbehavingError(int s) : score{s} {}
-
-     // Constructor does a perfect forwarding reference
-    template <typename T>
-    MisbehavingError(int s, T&& msg) :
-        score{s},
-        message{std::forward<T>(msg)}
-    {}
-};
-
-// TODO: replace usages of PeerMsgRet to MessageProcessingResult which is cover this one
-using PeerMsgRet = tl::expected<void, MisbehavingError>;
-
-/**
- * This struct is a helper to return values from handlers that are processing
- * network messages but implemented outside of net_processing.cpp,
- * for example llmq's messages.
- *
- * These handlers do not supposed to know anything about PeerManager to avoid
- * circular dependencies.
- *
- * See `PeerManagerImpl::PostProcessMessage` to see how each type of return code
- * is processed.
- */
-struct MessageProcessingResult
-{
-    //! @m_error triggers Misbehaving error with score and optional message if not nullopt
-    std::optional<MisbehavingError> m_error;
-
-    //! @m_inventory will relay this inventory to connected peers if not nullopt
-    std::optional<CInv> m_inventory;
-
-    //! @m_transactions will relay transactions to peers which is ready to accept it (some peers does not accept transactions)
-    std::vector<uint256> m_transactions;
-
-    //! @m_to_erase triggers EraseObjectRequest from PeerManager for this inventory if not nullopt
-    std::optional<CInv> m_to_erase;
-
-    MessageProcessingResult() = default;
-    MessageProcessingResult(MisbehavingError error) :
-        m_error(error)
-    {}
-    MessageProcessingResult(CInv inv) :
-        m_inventory(inv)
-    {
-    }
-};
 
 #endif // BITCOIN_PROTOCOL_H

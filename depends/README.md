@@ -12,7 +12,7 @@ For example:
 
     make HOST=x86_64-w64-mingw32 -j4
 
-**Dash Core's `configure` script by default will ignore the depends output.** In
+**Gryphonmoon Core's `configure` script by default will ignore the depends output.** In
 order for it to pick up libraries, tools, and settings from the depends build,
 you must set the `CONFIG_SITE` environment variable to point to a `config.site` settings file.
 In the above example, a file named `depends/x86_64-w64-mingw32/share/config.site` will be
@@ -41,13 +41,13 @@ Common `host-platform-triplet`s for cross compilation are:
 - `aarch64-linux-android` for Android ARM 64 bit
 - `x86_64-linux-android` for Android x86 64 bit
 
-The paths are automatically configured and no other options are needed unless targeting [Android](../doc/build-android.md).
+The paths are automatically configured and no other options are needed unless targeting [Android](#Android).
 
 ### Install the required dependencies: Ubuntu & Debian
 
 #### For macOS cross compilation
 
-    sudo apt-get install curl bsdmainutils cmake libz-dev python3-setuptools libtinfo5 xorriso
+    sudo apt-get install curl bsdmainutils cmake libcap-dev libz-dev libbz2-dev python3-setuptools libtinfo5 xorriso
 
 Note: You must obtain the macOS SDK before proceeding with a cross-compile.
 Under the depends directory, create a subdirectory named `SDKs`.
@@ -80,16 +80,12 @@ For linux RISC-V 64-bit cross compilation (there are no packages for 32-bit):
 
     sudo apt-get install g++-riscv64-linux-gnu binutils-riscv64-linux-gnu
 
-RISC-V known issue: gcc-7.3.0 and gcc-7.3.1 result in a broken `test_dash` executable (see https://github.com/bitcoin/bitcoin/pull/13543),
+RISC-V known issue: gcc-7.3.0 and gcc-7.3.1 result in a broken `test_gryphonmoon` executable (see https://github.com/bitcoin/bitcoin/pull/13543),
 this is apparently fixed in gcc-8.1.0.
 
 For linux S390X cross compilation:
 
     sudo apt-get install g++-s390x-linux-gnu binutils-s390x-linux-gnu
-
-### Install the required dependencies: FreeBSD
-
-    pkg install bash
 
 ### Install the required dependencies: OpenBSD
 
@@ -120,14 +116,10 @@ The following can be set when running make: `make FOO=bar`
 - `BUILD_ID_SALT`: Optional salt to use when generating build package ids
 - `FORCE_USE_SYSTEM_CLANG`: (EXPERTS ONLY) When cross-compiling for macOS, use Clang found in the
   system's `$PATH` rather than the default prebuilt release of Clang
-  from llvm.org. Clang 8 or later is required
-- `LOG`: Use file-based logging for individual packages. During a package build its log file
-  resides in the `depends` directory, and the log file is printed out automatically in case
-  of build error. After successful build log files are moved along with package archives
-- `LTO`: Use LTO when building packages.
+  from llvm.org. Clang 8 or later is required.
 
 If some packages are not built, for example `make NO_WALLET=1`, the appropriate
-options will be passed to Dash Core's configure. In this case, `--disable-wallet`.
+options will be passed to Gryphonmoon Core's configure. In this case, `--disable-wallet`.
 
 ### Additional targets
 
@@ -136,6 +128,18 @@ options will be passed to Dash Core's configure. In this case, `--disable-wallet
     download-win: run 'make download-win' to fetch all sources needed for win builds
     download-linux: run 'make download-linux' to fetch all sources needed for linux builds
 
+
+### Android
+
+Before proceeding with an Android build one needs to get the [Android SDK](https://developer.android.com/studio) and use the "SDK Manager" tool to download the NDK and one or more "Platform packages" (these are Android versions and have a corresponding API level).
+In order to build `ANDROID_API_LEVEL` (API level corresponding to the Android version targeted, e.g. Android 9.0 Pie is 28 and its "Platform package" needs to be available) and `ANDROID_TOOLCHAIN_BIN` (path to toolchain binaries depending on the platform the build is being performed on) need to be set.
+
+API levels from 24 to 29 have been tested to work.
+
+If the build includes Qt, environment variables `ANDROID_SDK` and `ANDROID_NDK` need to be set as well but can otherwise be omitted.
+This is an example command for a default build with no disabled dependencies:
+
+    ANDROID_SDK=/home/user/Android/Sdk ANDROID_NDK=/home/user/Android/Sdk/ndk-bundle make HOST=aarch64-linux-android ANDROID_API_LEVEL=28 ANDROID_TOOLCHAIN_BIN=/home/user/Android/Sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin
 
 ### Other documentation
 

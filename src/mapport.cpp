@@ -103,7 +103,7 @@ static bool NatpmpMapping(natpmp_t* natpmp, const struct in_addr& external_ipv4_
                     AddLocal(external, LOCAL_MAPPED);
                     external_ip_discovered = true;
                 }
-                LogPrintf("natpmp: Port mapping successful. External address = %s\n", external.ToStringAddrPort());
+                LogPrintf("natpmp: Port mapping successful. External address = %s\n", external.ToString());
                 return true;
             } else {
                 LogPrintf("natpmp: Port mapping failed.\n");
@@ -167,11 +167,8 @@ static bool ProcessUpnp()
     struct UPNPUrls urls;
     struct IGDdatas data;
     int r;
-#if MINIUPNPC_API_VERSION <= 17
+
     r = UPNP_GetValidIGD(devlist, &urls, &data, lanaddr, sizeof(lanaddr));
-#else
-    r = UPNP_GetValidIGD(devlist, &urls, &data, lanaddr, sizeof(lanaddr), nullptr, 0);
-#endif
     if (r == 1)
     {
         if (fDiscover) {
@@ -181,10 +178,10 @@ static bool ProcessUpnp()
                 LogPrintf("UPnP: GetExternalIPAddress() returned %d\n", r);
             } else {
                 if (externalIPAddress[0]) {
-                    std::optional<CNetAddr> resolved{LookupHost(externalIPAddress, false)};
-                    if (resolved.has_value()) {
-                        LogPrintf("UPnP: ExternalIPAddress = %s\n", resolved->ToStringAddr());
-                        AddLocal(resolved.value(), LOCAL_MAPPED);
+                    CNetAddr resolved;
+                    if (LookupHost(externalIPAddress, resolved, false)) {
+                        LogPrintf("UPnP: ExternalIPAddress = %s\n", resolved.ToString());
+                        AddLocal(resolved, LOCAL_MAPPED);
                     }
                 } else {
                     LogPrintf("UPnP: GetExternalIPAddress failed.\n");

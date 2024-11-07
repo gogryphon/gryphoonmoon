@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -52,7 +52,7 @@ CMerkleBlock::CMerkleBlock(const CBlock& block, CBloomFilter* filter, const std:
     {
         const auto& tx = *block.vtx[i];
         const uint256& hash = tx.GetHash();
-        bool isAllowedType = !tx.IsSpecialTxVersion() || allowedTxTypes.count(tx.nType) != 0;
+        bool isAllowedType = tx.nVersion != 3 || allowedTxTypes.count(tx.nType) != 0;
 
         if (txids && txids->count(hash)) {
             vMatch.push_back(true);
@@ -73,7 +73,7 @@ uint256 CPartialMerkleTree::CalcHash(int height, unsigned int pos, const std::ve
     //if we do not have this assert, we can hit a memory access violation when indexing into vTxid
     assert(vTxid.size() != 0);
     if (height == 0) {
-        // hash at height 0 is the txids themselves
+        // hash at height 0 is the txids themself
         return vTxid[pos];
     } else {
         // calculate left hash

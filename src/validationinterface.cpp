@@ -12,7 +12,7 @@
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <scheduler.h>
-#include <evo/deterministicmns.h>
+
 #include <governance/vote.h>
 #include <llmq/clsig.h>
 #include <llmq/signing.h>
@@ -47,7 +47,7 @@ public:
 
     explicit MainSignalsInstance(CScheduler& scheduler LIFETIMEBOUND) : m_schedulerClient(scheduler) {}
 
-    void Register(std::shared_ptr<CValidationInterface> callbacks) EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    void Register(std::shared_ptr<CValidationInterface> callbacks)
     {
         LOCK(m_mutex);
         auto inserted = m_map.emplace(callbacks.get(), m_list.end());
@@ -55,7 +55,7 @@ public:
         inserted.first->second->callbacks = std::move(callbacks);
     }
 
-    void Unregister(CValidationInterface* callbacks) EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    void Unregister(CValidationInterface* callbacks)
     {
         LOCK(m_mutex);
         auto it = m_map.find(callbacks);
@@ -69,7 +69,7 @@ public:
     //! map entry. After this call, the list may still contain callbacks that
     //! are currently executing, but it will be cleared when they are done
     //! executing.
-    void Clear() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    void Clear()
     {
         LOCK(m_mutex);
         for (const auto& entry : m_map) {
@@ -78,7 +78,7 @@ public:
         m_map.clear();
     }
 
-    template<typename F> void Iterate(F&& f) EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    template<typename F> void Iterate(F&& f)
     {
         WAIT_LOCK(m_mutex, lock);
         for (auto it = m_list.begin(); it != m_list.end();) {
@@ -208,17 +208,17 @@ void CMainSignals::SynchronousUpdatedBlockTip(const CBlockIndex *pindexNew, cons
     m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.SynchronousUpdatedBlockTip(pindexNew, pindexFork, fInitialDownload); });
 }
 
-void CMainSignals::TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime, uint64_t mempool_sequence) {
-    auto event = [tx, nAcceptTime, mempool_sequence, this] {
-        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.TransactionAddedToMempool(tx, nAcceptTime, mempool_sequence); });
+void CMainSignals::TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime) {
+    auto event = [tx, nAcceptTime, this] {
+        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.TransactionAddedToMempool(tx, nAcceptTime); });
     };
     ENQUEUE_AND_LOG_EVENT(event, "%s: txid=%s", __func__,
                           tx->GetHash().ToString());
 }
 
-void CMainSignals::TransactionRemovedFromMempool(const CTransactionRef& tx, MemPoolRemovalReason reason, uint64_t mempool_sequence) {
-    auto event = [tx, reason, mempool_sequence, this] {
-        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.TransactionRemovedFromMempool(tx, reason, mempool_sequence); });
+void CMainSignals::TransactionRemovedFromMempool(const CTransactionRef& tx, MemPoolRemovalReason reason) {
+    auto event = [tx, reason, this] {
+        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.TransactionRemovedFromMempool(tx, reason); });
     };
     ENQUEUE_AND_LOG_EVENT(event, "%s: txid=%s", __func__,
                           tx->GetHash().ToString());
@@ -288,9 +288,9 @@ void CMainSignals::NotifyChainLock(const CBlockIndex* pindex, const std::shared_
             clsig->ToString());
 }
 
-void CMainSignals::NotifyGovernanceVote(const CDeterministicMNList& tip_mn_list, const std::shared_ptr<const CGovernanceVote>& vote) {
-    auto event = [vote, tip_mn_list, this] {
-        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.NotifyGovernanceVote(tip_mn_list, vote); });
+void CMainSignals::NotifyGovernanceVote(const std::shared_ptr<const CGovernanceVote>& vote) {
+    auto event = [vote, this] {
+        m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.NotifyGovernanceVote(vote); });
     };
     ENQUEUE_AND_LOG_EVENT(event, "%s: notify governance vote: %s", __func__, vote->GetHash().ToString());
 }

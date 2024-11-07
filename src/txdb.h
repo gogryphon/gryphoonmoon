@@ -8,22 +8,19 @@
 
 #include <coins.h>
 #include <dbwrapper.h>
+#include <chain.h>
+#include <primitives/block.h>
 #include <spentindex.h>
 #include <timestampindex.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-class CBlockFileInfo;
 class CBlockIndex;
+class CCoinsViewDBCursor;
 class uint256;
-namespace Consensus {
-struct Params;
-};
-struct bilingual_str;
 
 //! -dbcache default (MiB)
 static const int64_t nDefaultDbCache = 300;
@@ -65,7 +62,7 @@ public:
     bool HaveCoin(const COutPoint &outpoint) const override;
     uint256 GetBestBlock() const override;
     std::vector<uint256> GetHeadBlocks() const override;
-    bool BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock, bool erase = true) override;
+    bool BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock) override;
     std::unique_ptr<CCoinsViewCursor> Cursor() const override;
 
     //! Attempt to update from an older database format. Returns whether an error occurred.
@@ -87,30 +84,22 @@ public:
     bool ReadLastBlockFile(int &nFile);
     bool WriteReindexing(bool fReindexing);
     void ReadReindexing(bool &fReindexing);
-
-    bool ReadSpentIndex(const CSpentIndexKey key, CSpentIndexValue& value);
-    bool UpdateSpentIndex(const std::vector<CSpentIndexEntry>& vect);
-
-    bool ReadAddressUnspentIndex(const uint160& addressHash, const AddressType type,
-                                 std::vector<CAddressUnspentIndexEntry>& vect);
-    bool UpdateAddressUnspentIndex(const std::vector<CAddressUnspentIndexEntry>& vect);
-
-    bool WriteAddressIndex(const std::vector<CAddressIndexEntry>& vect);
-    bool EraseAddressIndex(const std::vector<CAddressIndexEntry>& vect);
-    bool ReadAddressIndex(const uint160& addressHash, const AddressType type,
-                          std::vector<CAddressIndexEntry>& addressIndex,
-                          const int32_t start = 0, const int32_t end = 0);
-
-    bool WriteTimestampIndex(const CTimestampIndexKey& timestampIndex);
+    bool ReadSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value);
+    bool UpdateSpentIndex(const std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> >&vect);
+    bool UpdateAddressUnspentIndex(const std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue > >&vect);
+    bool ReadAddressUnspentIndex(uint160 addressHash, AddressType type,
+                                 std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &vect);
+    bool WriteAddressIndex(const std::vector<std::pair<CAddressIndexKey, CAmount> > &vect);
+    bool EraseAddressIndex(const std::vector<std::pair<CAddressIndexKey, CAmount> > &vect);
+    bool ReadAddressIndex(uint160 addressHash, AddressType type,
+                          std::vector<std::pair<CAddressIndexKey, CAmount> > &addressIndex,
+                          int start = 0, int end = 0);
+    bool WriteTimestampIndex(const CTimestampIndexKey &timestampIndex);
     bool EraseTimestampIndex(const CTimestampIndexKey& timestampIndex);
-    bool ReadTimestampIndex(const uint32_t high, const uint32_t low, std::vector<uint256>& hashes);
-
+    bool ReadTimestampIndex(const unsigned int &high, const unsigned int &low, std::vector<uint256> &vect);
     bool WriteFlag(const std::string &name, bool fValue);
     bool ReadFlag(const std::string &name, bool &fValue);
-    bool LoadBlockIndexGuts(const Consensus::Params& consensusParams, std::function<CBlockIndex*(const uint256&)> insertBlockIndex)
-        EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+    bool LoadBlockIndexGuts(const Consensus::Params& consensusParams, std::function<CBlockIndex*(const uint256&)> insertBlockIndex);
 };
-
-std::optional<bilingual_str> CheckLegacyTxindex(CBlockTreeDB& block_tree_db);
 
 #endif // BITCOIN_TXDB_H

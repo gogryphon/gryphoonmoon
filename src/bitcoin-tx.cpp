@@ -13,8 +13,6 @@
 #include <consensus/consensus.h>
 #include <core_io.h>
 #include <key_io.h>
-#include <fs.h>
-#include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
 #include <script/sign.h>
@@ -105,11 +103,11 @@ static int AppInitRawTx(int argc, char* argv[])
 
     if (argc < 2 || HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
         // First part of help message is specific to this utility
-        std::string strUsage = PACKAGE_NAME " dash-tx utility version " + FormatFullVersion() + "\n";
+        std::string strUsage = PACKAGE_NAME " gryphonmoon-tx utility version " + FormatFullVersion() + "\n";
         if (!gArgs.IsArgSet("-version")) {
             strUsage += "\n"
-                "Usage:  dash-tx [options] <hex-tx> [commands]  Update hex-encoded dash transaction\n"
-                "or:     dash-tx [options] -create [commands]   Create hex-encoded dash transaction\n"
+                "Usage:  gryphonmoon-tx [options] <hex-tx> [commands]  Update hex-encoded gryphonmoon transaction\n"
+                "or:     gryphonmoon-tx [options] -create [commands]   Create hex-encoded gryphonmoon transaction\n"
                 "\n";
             strUsage += gArgs.GetHelpMessage();
         }
@@ -163,7 +161,7 @@ static void RegisterLoad(const std::string& strInput)
     std::string key = strInput.substr(0, pos);
     std::string filename = strInput.substr(pos + 1, std::string::npos);
 
-    FILE *f = fsbridge::fopen(filename.c_str(), "r");
+    FILE *f = fopen(filename.c_str(), "r");
     if (!f) {
         std::string strErr = "Cannot open file " + filename;
         throw std::runtime_error(strErr);
@@ -204,9 +202,8 @@ static CAmount ExtractAndValidateValue(const std::string& strValue)
 static void MutateTxVersion(CMutableTransaction& tx, const std::string& cmdVal)
 {
     int64_t newVersion;
-    if (!ParseInt64(cmdVal, &newVersion) || newVersion < 1 || newVersion > TX_MAX_STANDARD_VERSION) {
+    if (!ParseInt64(cmdVal, &newVersion) || newVersion < 1 || newVersion > CTransaction::MAX_STANDARD_VERSION)
         throw std::runtime_error("Invalid TX version requested: '" + cmdVal + "'");
-    }
 
     tx.nVersion = (int) newVersion;
 }
@@ -383,16 +380,13 @@ static void MutateTxAddOutData(CMutableTransaction& tx, const std::string& strIn
     if (pos==0)
         throw std::runtime_error("TX output value not specified");
 
-    if (pos == std::string::npos) {
-        pos = 0;
-    } else {
+    if (pos != std::string::npos) {
         // Extract and validate VALUE
         value = ExtractAndValidateValue(strInput.substr(0, pos));
-        ++pos;
     }
 
     // extract and validate DATA
-    const std::string strData{strInput.substr(pos, std::string::npos)};
+    std::string strData = strInput.substr(pos + 1, std::string::npos);
 
     if (!IsHex(strData))
         throw std::runtime_error("invalid TX output data");
@@ -680,7 +674,7 @@ static void MutateTx(CMutableTransaction& tx, const std::string& command,
 static void OutputTxJSON(const CTransaction& tx)
 {
     UniValue entry(UniValue::VOBJ);
-    TxToUniv(tx, uint256(), /* include_addresses */ false, entry);
+    TxToUniv(tx, uint256(), entry);
 
     std::string jsonOutput = entry.write(4);
     tfm::format(std::cout, "%s\n", jsonOutput);
@@ -748,7 +742,7 @@ static int CommandLineRawTx(int argc, char* argv[])
             if (argc < 2)
                 throw std::runtime_error("too few parameters");
 
-            // param: hex-encoded dash transaction
+            // param: hex-encoded gryphonmoon transaction
             std::string strHexTx(argv[1]);
             if (strHexTx == "-")                 // "-" implies standard input
                 strHexTx = readStdin();

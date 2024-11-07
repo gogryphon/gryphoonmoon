@@ -1,16 +1,16 @@
-# Fuzzing Dash Core using libFuzzer
+# Fuzzing Gryphonmoon Core using libFuzzer
 
 ## Quickstart guide
 
-To quickly get started fuzzing Dash Core using [libFuzzer](https://llvm.org/docs/LibFuzzer.html):
+To quickly get started fuzzing Gryphonmoon Core using [libFuzzer](https://llvm.org/docs/LibFuzzer.html):
 
 ```sh
-$ git clone https://github.com/dashpay/dash
-$ cd dash/
+$ git clone https://github.com/gogryphon/gryphonmoon
+$ cd gryphonmoon/
 $ ./autogen.sh
 $ CC=clang CXX=clang++ ./configure --enable-fuzz --with-sanitizers=address,fuzzer,undefined
 # macOS users: If you have problem with this step then make sure to read "macOS hints for
-# libFuzzer" on https://github.com/dashpay/dash/blob/develop/doc/fuzzing.md#macos-hints-for-libfuzzer
+# libFuzzer" on https://github.com/gogryphon/gryphonmoon/blob/develop/doc/fuzzing.md#macos-hints-for-libfuzzer
 $ make
 $ FUZZ=process_message src/test/fuzz/fuzz
 # abort fuzzing using ctrl-c
@@ -18,7 +18,7 @@ $ FUZZ=process_message src/test/fuzz/fuzz
 
 ## Fuzzing harnesses and output
 
-[`process_message`](https://github.com/dashpay/dash/blob/develop/src/test/fuzz/process_message.cpp) is a fuzzing harness for the [`ProcessMessage(...)` function (`net_processing`)](https://github.com/dashpay/dash/blob/develop/src/net_processing.cpp). The available fuzzing harnesses are found in [`src/test/fuzz/`](https://github.com/dashpay/dash/tree/develop/src/test/fuzz).
+[`process_message`](https://github.com/gogryphon/gryphonmoon/blob/develop/src/test/fuzz/process_message.cpp) is a fuzzing harness for the [`ProcessMessage(...)` function (`net_processing`)](https://github.com/gogryphon/gryphonmoon/blob/develop/src/net_processing.cpp). The available fuzzing harnesses are found in [`src/test/fuzz/`](https://github.com/gogryphon/gryphonmoon/tree/develop/src/test/fuzz).
 
 The fuzzer will output `NEW` every time it has created a test input that covers new areas of the code under test. For more information on how to interpret the fuzzer output, see the [libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html).
 
@@ -64,15 +64,6 @@ block^@M-^?M-^?M-^?M-^?M-^?nM-^?M-^?
 
 In this case the fuzzer managed to create a `block` message which when passed to `ProcessMessage(...)` increased coverage.
 
-It is possible to specify `dashd` arguments to the `fuzz` executable.
-Depending on the test, they may be ignored or consumed and alter the behavior
-of the test. Just make sure to use double-dash to distinguish them from the
-fuzzer's own arguments:
-
-```sh
-$ FUZZ=address_deserialize_v2 src/test/fuzz/fuzz -runs=1 fuzz_seed_corpus/address_deserialize_v2 --checkaddrman=5 --printtoconsole=1
-```
-
 ## Fuzzing corpora
 
 The project's collection of seed corpora is found in the [`bitcoin-core/qa-assets`](https://github.com/bitcoin-core/qa-assets) repo.
@@ -112,7 +103,7 @@ Fuzzing on a harness compiled with `--with-sanitizers=address,fuzzer,undefined` 
 
 If you find coverage increasing inputs when fuzzing you are highly encouraged to submit them for inclusion in the [`bitcoin-core/qa-assets`](https://github.com/bitcoin-core/qa-assets) repo.
 
-Every single pull request submitted against the Dash Core repo is automatically tested against all inputs in the [`bitcoin-core/qa-assets`](https://github.com/bitcoin-core/qa-assets) repo. Contributing new coverage increasing inputs is an easy way to help make Dash Core more robust.
+Every single pull request submitted against the Gryphonmoon Core repo is automatically tested against all inputs in the [`bitcoin-core/qa-assets`](https://github.com/bitcoin-core/qa-assets) repo. Contributing new coverage increasing inputs is an easy way to help make Gryphonmoon Core more robust.
 
 ## macOS hints for libFuzzer
 
@@ -122,30 +113,30 @@ example using `brew install llvm`.
 
 Should you run into problems with the address sanitizer, it is possible you
 may need to run `./configure` with `--disable-asm` to avoid errors
-with certain assembly code from Dash Core's code. See [developer notes on sanitizers](https://github.com/dashpay/dash/blob/develop/doc/developer-notes.md#sanitizers)
+with certain assembly code from Gryphonmoon Core's code. See [developer notes on sanitizers](https://github.com/gogryphon/gryphonmoon/blob/develop/doc/developer-notes.md#sanitizers)
 for more information.
 
 You may also need to take care of giving the correct path for `clang` and
 `clang++`, like `CC=/path/to/clang CXX=/path/to/clang++` if the non-systems
 `clang` does not come first in your path.
 
-Full configure that was tested on macOS with `brew` installed `llvm`:
+Full configure that was tested on macOS Catalina with `brew` installed `llvm`:
 
 ```sh
-./configure --enable-fuzz --with-sanitizers=fuzzer,address,undefined --disable-asm CC=$(brew --prefix llvm)/bin/clang CXX=$(brew --prefix llvm)/bin/clang++
+./configure --enable-fuzz --with-sanitizers=fuzzer,address,undefined CC=/usr/local/opt/llvm/bin/clang CXX=/usr/local/opt/llvm/bin/clang++ --disable-asm
 ```
 
 Read the [libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html) for more information. This [libFuzzer tutorial](https://github.com/google/fuzzing/blob/master/tutorial/libFuzzerTutorial.md) might also be of interest.
 
-# Fuzzing Dash Core using afl++
+# Fuzzing Gryphonmoon Core using afl++
 
 ## Quickstart guide
 
-To quickly get started fuzzing Dash Core using [afl++](https://github.com/AFLplusplus/AFLplusplus):
+To quickly get started fuzzing Gryphonmoon Core using [afl++](https://github.com/AFLplusplus/AFLplusplus):
 
 ```sh
-$ git clone https://github.com/dashpay/dash
-$ cd dash/
+$ git clone https://github.com/gogryphon/gryphonmoon
+$ cd gryphonmoon/
 $ git clone https://github.com/AFLplusplus/AFLplusplus
 $ make -C AFLplusplus/ source-only
 $ ./autogen.sh
@@ -164,15 +155,15 @@ $ FUZZ=bech32 AFLplusplus/afl-fuzz -i inputs/ -o outputs/ -- src/test/fuzz/fuzz
 
 Read the [afl++ documentation](https://github.com/AFLplusplus/AFLplusplus) for more information.
 
-# Fuzzing Dash Core using Honggfuzz
+# Fuzzing Gryphonmoon Core using Honggfuzz
 
 ## Quickstart guide
 
-To quickly get started fuzzing Dash Core using [Honggfuzz](https://github.com/google/honggfuzz):
+To quickly get started fuzzing Gryphonmoon Core using [Honggfuzz](https://github.com/google/honggfuzz):
 
 ```sh
-$ git clone https://github.com/dashpay/dash
-$ cd dash/
+$ git clone https://github.com/gogryphon/gryphonmoon
+$ cd gryphonmoon/
 $ ./autogen.sh
 $ git clone https://github.com/google/honggfuzz
 $ cd honggfuzz/
@@ -186,10 +177,10 @@ $ FUZZ=process_message honggfuzz/honggfuzz -i inputs/ -- src/test/fuzz/fuzz
 
 Read the [Honggfuzz documentation](https://github.com/google/honggfuzz/blob/master/docs/USAGE.md) for more information.
 
-## Fuzzing the Dash Core P2P layer using Honggfuzz NetDriver
+## Fuzzing the Gryphonmoon Core P2P layer using Honggfuzz NetDriver
 
-Honggfuzz NetDriver allows for very easy fuzzing of TCP servers such as Dash
-Core without having to write any custom fuzzing harness. The `dashd` server
+Honggfuzz NetDriver allows for very easy fuzzing of TCP servers such as Gryphonmoon
+Core without having to write any custom fuzzing harness. The `gryphonmoond` server
 process is largely fuzzed without modification.
 
 This makes the fuzzing highly realistic: a bug reachable by the fuzzer is likely
@@ -200,8 +191,8 @@ To quickly get started fuzzing the P2P layer using Honggfuzz NetDriver:
 ```sh
 $ mkdir bitcoin-honggfuzz-p2p/
 $ cd bitcoin-honggfuzz-p2p/
-$ git clone https://github.com/dashpay/dash/
-$ cd dash/
+$ git clone https://github.com/gogryphon/gryphonmoon/
+$ cd gryphonmoon/
 $ ./autogen.sh
 $ git clone https://github.com/google/honggfuzz
 $ cd honggfuzz/
@@ -212,57 +203,50 @@ $ CC=$(pwd)/honggfuzz/hfuzz_cc/hfuzz-clang \
       ./configure --disable-wallet --with-gui=no \
                   --with-sanitizers=address,undefined
 $ git apply << "EOF"
-diff --git a/src/compat/compat.h b/src/compat/compat.h
-index 8195bceaec..cce2b31ff0 100644
---- a/src/compat/compat.h
-+++ b/src/compat/compat.h
-@@ -90,8 +90,12 @@ typedef char* sockopt_arg_type;
- // building with a binutils < 2.36 is subject to this ld bug.
- #define MAIN_FUNCTION __declspec(dllexport) int main(int argc, char* argv[])
- #else
-+#ifdef HFND_FUZZING_ENTRY_FUNCTION_CXX
-+#define MAIN_FUNCTION HFND_FUZZING_ENTRY_FUNCTION_CXX(int argc, char* argv[])
-+#else
- #define MAIN_FUNCTION int main(int argc, char* argv[])
- #endif
-+#endif
+diff --git a/src/bitcoind.cpp b/src/bitcoind.cpp
+index 455a82e39..2faa3f80f 100644
+--- a/src/bitcoind.cpp
++++ b/src/bitcoind.cpp
+@@ -158,7 +158,11 @@ static bool AppInit(int argc, char* argv[])
+     return fRet;
+ }
 
- // Note these both should work with the current usage of poll, but best to be safe
- // WIN32 poll is broken https://daniel.haxx.se/blog/2012/10/10/wsapoll-is-broken/
++#ifdef HFND_FUZZING_ENTRY_FUNCTION_CXX
++HFND_FUZZING_ENTRY_FUNCTION_CXX(int argc, char* argv[])
++#else
+ int main(int argc, char* argv[])
++#endif
+ {
+ #ifdef WIN32
+     util::WinCmdLineArgs winArgs;
 diff --git a/src/net.cpp b/src/net.cpp
-index 7601a6ea84..702d0f56ce 100644
+index cf987b699..636a4176a 100644
 --- a/src/net.cpp
 +++ b/src/net.cpp
-@@ -727,7 +727,7 @@ int V1TransportDeserializer::readHeader(Span<const uint8_t> msg_bytes)
+@@ -709,7 +709,7 @@ int V1TransportDeserializer::readHeader(const char *pch, unsigned int nBytes)
      }
 
      // Check start string, network magic
 -    if (memcmp(hdr.pchMessageStart, m_chain_params.MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0) {
 +    if (false && memcmp(hdr.pchMessageStart, m_chain_params.MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0) { // skip network magic checking
-         LogPrint(BCLog::NET, "Header error: Wrong MessageStart %s received, peer=%d\n", HexStr(hdr.pchMessageStart), m_node_id);
+         LogPrint(BCLog::NET, "HEADER ERROR - MESSAGESTART (%s, %u bytes), received %s, peer=%d\n", hdr.GetCommand(), hdr.nMessageSize, HexStr(hdr.pchMessageStart), m_node_id);
          return -1;
      }
-@@ -788,7 +788,7 @@ CNetMessage V1TransportDeserializer::GetMessage(const std::chrono::microseconds
+@@ -768,7 +768,7 @@ Optional<CNetMessage> V1TransportDeserializer::GetMessage(const std::chrono::mic
      RandAddEvent(ReadLE32(hash.begin()));
 
-     // Check checksum and header message type string
+     // Check checksum and header command string
 -    if (memcmp(hash.begin(), hdr.pchChecksum, CMessageHeader::CHECKSUM_SIZE) != 0) {
 +    if (false && memcmp(hash.begin(), hdr.pchChecksum, CMessageHeader::CHECKSUM_SIZE) != 0) { // skip checksum checking
-         LogPrint(BCLog::NET, "Header error: Wrong checksum (%s, %u bytes), expected %s was %s, peer=%d\n",
-                  SanitizeString(msg.m_type), msg.m_message_size,
-                  HexStr(Span{hash}.first(CMessageHeader::CHECKSUM_SIZE)),
+         LogPrint(BCLog::NET, "CHECKSUM ERROR (%s, %u bytes), expected %s was %s, peer=%d\n",
+                  SanitizeString(msg->m_command), msg->m_message_size,
+                  HexStr(Span<uint8_t>(hash.begin(), hash.begin() + CMessageHeader::CHECKSUM_SIZE)),
 EOF
-$ make -C src/ dashd
+$ make -C src/ gryphonmoond
 $ mkdir -p inputs/
 $ honggfuzz/honggfuzz --exit_upon_crash --quiet --timeout 4 -n 1 -Q \
       -E HFND_TCP_PORT=18444 -f inputs/ -- \
-          src/dashd -regtest -discover=0 -dns=0 -dnsseed=0 -listenonion=0 \
+          src/gryphonmoond -regtest -discover=0 -dns=0 -dnsseed=0 -listenonion=0 \
                        -nodebuglogfile -bind=127.0.0.1:18444 -logthreadnames \
                        -debug
 ```
-
-# OSS-Fuzz
-
-Bitcoin Core participates in Google's [OSS-Fuzz](https://github.com/google/oss-fuzz/tree/master/projects/bitcoin-core)
-program, which includes a dashboard of [publicly disclosed vulnerabilities](https://bugs.chromium.org/p/oss-fuzz/issues/list).
-For more details, see [Bitcoin's OSS-fuzz](https://github.com/bitcoin/bitcoin/tree/master/doc/fuzzing.md)

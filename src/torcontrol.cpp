@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 The Bitcoin Core developers
+// Copyright (c) 2015-2019 The Bitcoin Core developers
 // Copyright (c) 2017 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -21,13 +21,16 @@
 #include <deque>
 #include <functional>
 #include <set>
+#include <stdlib.h>
 #include <vector>
 
-#include <event2/buffer.h>
+#include <boost/signals2/signal.hpp>
+
 #include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/util.h>
 #include <event2/event.h>
 #include <event2/thread.h>
-#include <event2/util.h>
 
 /** Default control port */
 const std::string DEFAULT_TOR_CONTROL = "127.0.0.1:9051";
@@ -48,7 +51,6 @@ static const float RECONNECT_TIMEOUT_EXP = 1.5;
  * this is belt-and-suspenders sanity limit to prevent memory exhaustion.
  */
 static const int MAX_LINE_LENGTH = 100000;
-static const uint16_t DEFAULT_TOR_SOCKS_PORT = 9050;
 
 /****** Low-level TorControlConnection ********/
 
@@ -131,15 +133,15 @@ bool TorControlConnection::Connect(const std::string& tor_control_center, const 
         Disconnect();
     }
 
-    const std::optional<CService> control_service{Lookup(tor_control_center, 9051, fNameLookup)};
-    if (!control_service.has_value()) {
+    CService control_service;
+    if (!Lookup(tor_control_center, control_service, 9051, fNameLookup)) {
         LogPrintf("tor: Failed to look up control center %s\n", tor_control_center);
         return false;
     }
 
     struct sockaddr_storage control_address;
     socklen_t control_address_len = sizeof(control_address);
-    if (!control_service.value().GetSockAddr(reinterpret_cast<struct sockaddr*>(&control_address), &control_address_len)) {
+    if (!control_service.GetSockAddr(reinterpret_cast<struct sockaddr*>(&control_address), &control_address_len)) {
         LogPrintf("tor: Error parsing socket address %s\n", tor_control_center);
         return false;
     }
@@ -271,15 +273,9 @@ std::map<std::string,std::string> ParseTorReplyMapping(const std::string &s)
                         if (j == 3 && value[i] > '3') {
                             j--;
                         }
-                        const auto end{i + j};
-                        uint8_t val{0};
-                        while (i < end) {
-                            val *= 8;
-                            val += value[i++] - '0';
-                        }
-                        escaped_value.push_back(char(val));
+                        escaped_value.push_back(strtol(value.substr(i, j).c_str(), nullptr, 8));
                         // Account for automatic incrementing at loop end
-                        --i;
+                        i += j - 1;
                     } else {
                         escaped_value.push_back(value[i]);
                     }
@@ -318,7 +314,7 @@ TorController::TorController(struct event_base* _base, const std::string& tor_co
     // Read service private key if cached
     std::pair<bool,std::string> pkf = ReadBinaryFile(GetPrivateKeyFile());
     if (pkf.first) {
-        LogPrint(BCLog::TOR, "tor: Reading cached private key from %s\n", fs::PathToString(GetPrivateKeyFile()));
+        LogPrint(BCLog::TOR, "tor: Reading cached private key from %s\n", GetPrivateKeyFile().string());
         private_key = pkf.second;
     }
 }
@@ -331,73 +327,6 @@ TorController::~TorController()
     }
     if (service.IsValid()) {
         RemoveLocal(service);
-    }
-}
-
-void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlReply& reply)
-{
-    // NOTE: We can only get here if -onion is unset
-    std::string socks_location;
-    if (reply.code == 250) {
-        for (const auto& line : reply.lines) {
-            if (0 == line.compare(0, 20, "net/listeners/socks=")) {
-                const std::string port_list_str = line.substr(20);
-                std::vector<std::string> port_list = SplitString(port_list_str, ' ');
-
-                for (auto& portstr : port_list) {
-                    if (portstr.empty()) continue;
-                    if ((portstr[0] == '"' || portstr[0] == '\'') && portstr.size() >= 2 && (*portstr.rbegin() == portstr[0])) {
-                        portstr = portstr.substr(1, portstr.size() - 2);
-                        if (portstr.empty()) continue;
-                    }
-                    socks_location = portstr;
-                    if (0 == portstr.compare(0, 10, "127.0.0.1:")) {
-                        // Prefer localhost - ignore other ports
-                        break;
-                    }
-                }
-            }
-        }
-        if (!socks_location.empty()) {
-            LogPrint(BCLog::TOR, "tor: Get SOCKS port command yielded %s\n", socks_location);
-        } else {
-            LogPrintf("tor: Get SOCKS port command returned nothing\n");
-        }
-    } else if (reply.code == 510) {  // 510 Unrecognized command
-        LogPrintf("tor: Get SOCKS port command failed with unrecognized command (You probably should upgrade Tor)\n");
-    } else {
-        LogPrintf("tor: Get SOCKS port command failed; error code %d\n", reply.code);
-    }
-
-    CService resolved;
-    Assume(!resolved.IsValid());
-    if (!socks_location.empty()) {
-        resolved = LookupNumeric(socks_location, DEFAULT_TOR_SOCKS_PORT);
-    }
-    if (!resolved.IsValid()) {
-        // Fallback to old behaviour
-        resolved = LookupNumeric("127.0.0.1", DEFAULT_TOR_SOCKS_PORT);
-    }
-
-    Assume(resolved.IsValid());
-    LogPrint(BCLog::TOR, "tor: Configuring onion proxy for %s\n", resolved.ToStringAddrPort());
-    Proxy addrOnion = Proxy(resolved, true);
-    SetProxy(NET_ONION, addrOnion);
-
-    const auto onlynets = gArgs.GetArgs("-onlynet");
-
-    const bool onion_allowed_by_onlynet{
-        !gArgs.IsArgSet("-onlynet") ||
-        std::any_of(onlynets.begin(), onlynets.end(), [](const auto& n) {
-            return ParseNetwork(n) == NET_ONION;
-        })};
-
-    if (onion_allowed_by_onlynet) {
-        // If NET_ONION is reachable, then the below is a noop.
-        //
-        // If NET_ONION is not reachable, then none of -proxy or -onion was given.
-        // Since we are here, then -torcontrol and -torpassword were given.
-        SetReachable(NET_ONION, true);
     }
 }
 
@@ -421,11 +350,11 @@ void TorController::add_onion_cb(TorControlConnection& _conn, const TorControlRe
             return;
         }
         service = LookupNumeric(std::string(service_id+".onion"), Params().GetDefaultPort());
-        LogPrintf("tor: Got service ID %s, advertising service %s\n", service_id, service.ToStringAddrPort());
+        LogPrintf("tor: Got service ID %s, advertising service %s\n", service_id, service.ToString());
         if (WriteBinaryFile(GetPrivateKeyFile(), private_key)) {
-            LogPrint(BCLog::TOR, "tor: Cached service private key to %s\n", fs::PathToString(GetPrivateKeyFile()));
+            LogPrint(BCLog::TOR, "tor: Cached service private key to %s\n", GetPrivateKeyFile().string());
         } else {
-            LogPrintf("tor: Error writing service private key to %s\n", fs::PathToString(GetPrivateKeyFile()));
+            LogPrintf("tor: Error writing service private key to %s\n", GetPrivateKeyFile().string());
         }
         AddLocal(service, LOCAL_MANUAL);
         // ... onion requested - keep connection open
@@ -444,7 +373,10 @@ void TorController::auth_cb(TorControlConnection& _conn, const TorControlReply& 
         // Now that we know Tor is running setup the proxy for onion addresses
         // if -onion isn't set to something else.
         if (gArgs.GetArg("-onion", "") == "") {
-            _conn.Command("GETINFO net/listeners/socks", std::bind(&TorController::get_socks_cb, this, std::placeholders::_1, std::placeholders::_2));
+            CService resolved(LookupNumeric("127.0.0.1", 9050));
+            proxyType addrOnion = proxyType(resolved, true);
+            SetProxy(NET_ONION, addrOnion);
+            SetReachable(NET_ONION, true);
         }
 
         // Finally - now create the service
@@ -453,7 +385,7 @@ void TorController::auth_cb(TorControlConnection& _conn, const TorControlReply& 
         }
         // Request onion service, redirect port.
         // Note that the 'virtual' port is always the default port to avoid decloaking nodes using other ports.
-        _conn.Command(strprintf("ADD_ONION %s Port=%i,%s", private_key, Params().GetDefaultPort(), m_target.ToStringAddrPort()),
+        _conn.Command(strprintf("ADD_ONION %s Port=%i,%s", private_key, Params().GetDefaultPort(), m_target.ToStringIPPort()),
             std::bind(&TorController::add_onion_cb, this, std::placeholders::_1, std::placeholders::_2));
     } else {
         LogPrintf("tor: Authentication failed\n");
@@ -574,12 +506,12 @@ void TorController::protocolinfo_cb(TorControlConnection& _conn, const TorContro
         } else if (methods.count("SAFECOOKIE")) {
             // Cookie: hexdump -e '32/1 "%02x""\n"'  ~/.tor/control_auth_cookie
             LogPrint(BCLog::TOR, "tor: Using SAFECOOKIE authentication, reading cookie authentication from %s\n", cookiefile);
-            std::pair<bool,std::string> status_cookie = ReadBinaryFile(fs::PathFromString(cookiefile), TOR_COOKIE_SIZE);
+            std::pair<bool,std::string> status_cookie = ReadBinaryFile(cookiefile, TOR_COOKIE_SIZE);
             if (status_cookie.first && status_cookie.second.size() == TOR_COOKIE_SIZE) {
                 // _conn.Command("AUTHENTICATE " + HexStr(status_cookie.second), std::bind(&TorController::auth_cb, this, std::placeholders::_1, std::placeholders::_2));
                 cookie = std::vector<uint8_t>(status_cookie.second.begin(), status_cookie.second.end());
                 clientNonce = std::vector<uint8_t>(TOR_NONCE_SIZE, 0);
-                GetRandBytes(clientNonce);
+                GetRandBytes(clientNonce.data(), TOR_NONCE_SIZE);
                 _conn.Command("AUTHCHALLENGE SAFECOOKIE " + HexStr(clientNonce), std::bind(&TorController::authchallenge_cb, this, std::placeholders::_1, std::placeholders::_2));
             } else {
                 if (status_cookie.first) {
@@ -637,7 +569,7 @@ void TorController::Reconnect()
 
 fs::path TorController::GetPrivateKeyFile()
 {
-    return gArgs.GetDataDirNet() / "onion_v3_private_key";
+    return GetDataDir() / "onion_v3_private_key";
 }
 
 void TorController::reconnect_cb(evutil_socket_t fd, short what, void *arg)

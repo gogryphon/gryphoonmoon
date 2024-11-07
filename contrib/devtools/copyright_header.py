@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2016-2020 The Bitcoin Core developers
-# Copyright (c) 2019-2024 The Dash Core developers
+# Copyright (c) 2019-2023 The Dash Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,19 +17,19 @@ import os
 
 EXCLUDE = [
     # auto generated:
-    'src/qt/dashstrings.cpp',
+    'src/qt/gryphonmoonstrings.cpp',
     'src/chainparamsseeds.h',
     # other external copyrights:
-    'src/bench/nanobench.h',
+    'src/bip39.cpp',
+    'src/bip39.h',
+    'src/bip39_english.h',
     'src/crypto/*',
     'src/ctpl_stl.h',
     'src/reverse_iterator.h',
+    'src/statsd_client.cpp',
     'src/test/fuzz/FuzzedDataProvider.h',
     'src/tinyformat.h',
-    'src/util/expected.h',
-    'src/wallet/bip39.cpp',
-    'src/wallet/bip39.h',
-    'src/wallet/bip39_english.h',
+    'src/bench/nanobench.h',
     'test/functional/test_framework/bignum.py',
     # python init:
     '*__init__.py',
@@ -38,15 +38,13 @@ EXCLUDE_COMPILED = re.compile('|'.join([fnmatch.translate(m) for m in EXCLUDE]))
 
 EXCLUDE_DIRS = [
     # git subtrees
-    "src/crc32c/",
     "src/crypto/ctaes/",
     "src/dashbls/",
-    "src/gsl/",
     "src/immer/",
     "src/leveldb/",
-    "src/minisketch",
     "src/secp256k1/",
     "src/univalue/",
+    "src/crc32c/",
 ]
 
 INCLUDE = ['*.h', '*.cpp', '*.cc', '*.c', '*.mm', '*.py', '*.sh', '*.bash-completion']
@@ -116,8 +114,6 @@ EXPECTED_HOLDER_NAMES = [
     r"Intel Corporation ?",
     r"The Zcash developers",
     r"Jeremy Rubin",
-    r"Statoshi Developers",
-    r"Vincent Thiery",
 ]
 
 DOMINANT_STYLE_COMPILED = {}
@@ -287,7 +283,7 @@ Usage:
     $ ./copyright_header.py report <base_directory> [verbose]
 
 Arguments:
-    <base_directory> - The base directory of a Dash Core source code repository.
+    <base_directory> - The base directory of a Gryphonmoon Core source code repository.
     [verbose] - Includes a list of every file of each subcategory in the report.
 """
 
@@ -440,7 +436,7 @@ Usage:
     $ ./copyright_header.py update <base_directory>
 
 Arguments:
-    <base_directory> - The base directory of Dash Core source code repository.
+    <base_directory> - The base directory of Gryphonmoon Core source code repository.
 """
 
 def print_file_action_message(filename, action):
@@ -563,7 +559,7 @@ Usage:
     $ ./copyright_header.py insert <file>
 
 Arguments:
-    <file> - A source file in the Dash Core repository.
+    <file> - A source file in the Gryphonmoon Core repository.
 """
 
 def insert_cmd(argv):
@@ -590,7 +586,7 @@ def insert_cmd(argv):
 ################################################################################
 
 USAGE = """
-copyright_header.py - utilities for managing copyright headers of 'The Dash
+copyright_header.py - utilities for managing copyright headers of 'The Gryphonmoon
 Core developers' in repository source files.
 
 Usage:

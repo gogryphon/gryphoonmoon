@@ -62,7 +62,7 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, HelpMode helpMode) :
         ui->helpMessage->setVisible(false);
     } else if (helpMode == cmdline) {
         setWindowTitle(tr("Command-line options"));
-        QString header = "Usage:  dash-qt [command-line options]                     \n";
+        QString header = "Usage:  gryphonmoon-qt [command-line options]                     \n";
         QTextCursor cursor(ui->helpMessage->document());
         cursor.insertText(version);
         cursor.insertBlock();
@@ -115,13 +115,13 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, HelpMode helpMode) :
         ui->aboutMessage->setText(tr("\
 <h3>%1 Basics</h3> \
 %1 gives you true financial privacy by obscuring the origins of your funds. \
-All the Dash in your wallet is comprised of different \"inputs\" which you can think of as separate, discrete coins.<br> \
+All the Gryphonmoon in your wallet is comprised of different \"inputs\" which you can think of as separate, discrete coins.<br> \
 %1 uses an innovative process to mix your inputs with the inputs of two or more other people, without having your coins ever leave your wallet. \
 You retain control of your money at all times.<hr> \
 <b>The %1 process works like this:</b>\
 <ol type=\"1\"> \
 <li>%1 begins by breaking your transaction inputs down into standard denominations. \
-These denominations are 0.001 DASH, 0.01 DASH, 0.1 DASH, 1 DASH and 10 DASH -- sort of like the paper money you use every day.</li> \
+These denominations are 0.001 GRYPHONMOON, 0.01 GRYPHONMOON, 0.1 GRYPHONMOON, 1 GRYPHONMOON and 10 GRYPHONMOON -- sort of like the paper money you use every day.</li> \
 <li>Your wallet then sends requests to specially configured software nodes on the network, called \"masternodes.\" \
 These masternodes are informed then that you are interested in mixing a certain denomination. \
 No identifiable information is sent to the masternodes, so they never know \"who\" you are.</li> \
@@ -158,7 +158,7 @@ HelpMessageDialog::~HelpMessageDialog()
 void HelpMessageDialog::printToConsole()
 {
     // On other operating systems, the expected action is to print the message to the console.
-    tfm::format(std::cout, "%s", qPrintable(text));
+    tfm::format(std::cout, "%s\n", qPrintable(text));
 }
 
 void HelpMessageDialog::showOrPrint()
@@ -186,7 +186,7 @@ ShutdownWindow::ShutdownWindow(QWidget *parent, Qt::WindowFlags f):
 
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(new QLabel(
-        tr("%1 is shutting down…").arg(PACKAGE_NAME) + "<br /><br />" +
+        tr("%1 is shutting down...").arg(PACKAGE_NAME) + "<br /><br />" +
         tr("Do not shut down the computer until this window disappears.")));
     setLayout(layout);
 

@@ -3,11 +3,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <fs.h>
 #include <logging.h>
 #include <util/system.h>
 #include <util/threadnames.h>
-#include <util/string.h>
 #include <util/time.h>
 
 #include <algorithm>
@@ -99,7 +97,15 @@ void BCLog::Logger::EnableCategory(BCLog::LogFlags flag)
 bool BCLog::Logger::EnableCategory(const std::string& str)
 {
     BCLog::LogFlags flag;
-    if (!GetLogCategory(flag, str)) return false;
+    if (!GetLogCategory(flag, str)) {
+        if (str == "db") {
+            // DEPRECATION: Added in 0.20, should start returning an error in 0.21
+            LogPrintf("Warning: logging category 'db' is deprecated, use 'walletdb' instead\n");
+            EnableCategory(BCLog::WALLETDB);
+            return true;
+        }
+        return false;
+    }
     EnableCategory(flag);
     return true;
 }
@@ -159,13 +165,10 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::LEVELDB, "leveldb"},
     {BCLog::VALIDATION, "validation"},
     {BCLog::I2P, "i2p"},
-    {BCLog::IPC, "ipc"},
-    {BCLog::LOCK, "lock"},
-    {BCLog::TXRECONCILIATION, "txreconciliation"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 
-    //Start Dash
+    //Start Gryphonmoon
     {BCLog::CHAINLOCKS, "chainlocks"},
     {BCLog::GOBJECT, "gobject"},
     {BCLog::INSTANTSEND, "instantsend"},
@@ -179,8 +182,8 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::NETCONN, "netconn"},
     {BCLog::CREDITPOOL, "creditpool"},
     {BCLog::EHF, "ehf"},
-    {BCLog::DASH, "dash"},
-    //End Dash
+    {BCLog::GRYPHONMOON, "gryphonmoon"},
+    //End Gryphonmoon
 };
 
 bool GetLogCategory(BCLog::LogFlags& flag, const std::string& str)
@@ -207,7 +210,7 @@ std::vector<LogCategory> BCLog::Logger::LogCategoriesList(bool enabled_only) con
 
     std::vector<LogCategory> ret;
     for (const CLogCategoryDesc& category_desc : categories) {
-        if (category_desc.flag == BCLog::NONE || category_desc.flag == BCLog::ALL || category_desc.flag == BCLog::DASH) continue;
+        if (category_desc.flag == BCLog::NONE || category_desc.flag == BCLog::ALL || category_desc.flag == BCLog::GRYPHONMOON) continue;
         LogCategory catActive;
         catActive.category = category_desc.category;
         catActive.active = WillLogCategory(category_desc.flag);
@@ -265,17 +268,13 @@ namespace BCLog {
     }
 } // namespace BCLog
 
-void BCLog::Logger::LogPrintStr(const std::string& str, const std::string& logging_function, const std::string& source_file, const int source_line)
+void BCLog::Logger::LogPrintStr(const std::string& str)
 {
     StdLockGuard scoped_lock(m_cs);
     std::string str_prefixed = LogEscapeMessage(str);
 
-    if (m_log_sourcelocations && m_started_new_line) {
-        str_prefixed.insert(0, "[" + RemovePrefix(source_file, "./") + ":" + ToString(source_line) + "] [" + logging_function + "] ");
-    }
-
     if (m_log_threadnames && m_started_new_line) {
-        // 16 chars total, "dash-" is 5 of them and another 1 is a NUL terminator
+        // 16 chars total, "gryphonmoon-" is 5 of them and another 1 is a NUL terminator
         str_prefixed.insert(0, "[" + strprintf("%10s", util::ThreadGetInternalName()) + "] ");
     }
 

@@ -15,12 +15,12 @@ ARG guix_checksum_aarch64=72d807392889919940b7ec9632c45a259555e6b0942ea7bfd13110
 ARG guix_checksum_x86_64=236ca7c9c5958b1f396c2924fcc5bc9d6fdebcb1b4cf3c7c6d46d4bf660ed9c9
 ARG builder_count=32
 
-ENV PATH="/root/.config/guix/current/bin:$PATH"
+ENV PATH /root/.config/guix/current/bin:$PATH
 
 # Application Setup
 # https://guix.gnu.org/manual/en/html_node/Application-Setup.html
-ENV GUIX_LOCPATH="/root/.guix-profile/lib/locale"
-ENV LC_ALL="en_US.UTF-8"
+ENV GUIX_LOCPATH /root/.guix-profile/lib/locale
+ENV LC_ALL en_US.UTF-8
 
 RUN guix_file_name=guix-binary-${guix_version}.$(uname -m)-linux.tar.xz    && \
     eval "guix_checksum=\${guix_checksum_$(uname -m)}"                     && \
@@ -52,11 +52,11 @@ RUN for i in $(seq -w 1 ${builder_count}); do    \
 
 ENTRYPOINT ["/root/.config/guix/current/bin/guix-daemon","--build-users-group=guixbuild"]
 
-RUN git clone https://github.com/dashpay/dash.git /dash
+RUN git clone https://github.com/gogryphon/gryphonmoon.git /gryphonmoon
 
 RUN mkdir base_cache sources SDKs
 
-WORKDIR /dash
+WORKDIR /gryphonmoon
 
 RUN mkdir -p depends/SDKs && \
     curl -L https://bitcoincore.org/depends-sources/sdks/Xcode-12.2-12B45b-extracted-SDK-with-libcxx-headers.tar.gz | tar -xz -C depends/SDKs

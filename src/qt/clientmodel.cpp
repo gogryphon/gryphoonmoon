@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2020 The Bitcoin Core developers
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,7 +9,6 @@
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
 #include <qt/peertablemodel.h>
-#include <qt/peertablesortproxy.h>
 
 #include <evo/deterministicmns.h>
 
@@ -43,11 +42,7 @@ ClientModel::ClientModel(interfaces::Node& node, OptionsModel *_optionsModel, QO
 {
     cachedBestHeaderHeight = -1;
     cachedBestHeaderTime = -1;
-
     peerTableModel = new PeerTableModel(m_node, this);
-    m_peer_table_sort_proxy = new PeerTableSortProxy(this);
-    m_peer_table_sort_proxy->setSourceModel(peerTableModel);
-
     banTableModel = new BanTableModel(m_node, this);
     mnListCached = std::make_shared<CDeterministicMNList>();
 
@@ -81,14 +76,14 @@ ClientModel::~ClientModel()
 
 int ClientModel::getNumConnections(unsigned int flags) const
 {
-    ConnectionDirection connections = ConnectionDirection::None;
+    CConnman::NumConnections connections = CConnman::CONNECTIONS_NONE;
 
     if(flags == CONNECTIONS_IN)
-        connections = ConnectionDirection::In;
+        connections = CConnman::CONNECTIONS_IN;
     else if (flags == CONNECTIONS_OUT)
-        connections = ConnectionDirection::Out;
+        connections = CConnman::CONNECTIONS_OUT;
     else if (flags == CONNECTIONS_ALL)
-        connections = ConnectionDirection::Both;
+        connections = CConnman::CONNECTIONS_ALL;
 
     return m_node.getNodeCount(connections);
 }
@@ -224,11 +219,6 @@ PeerTableModel *ClientModel::getPeerTableModel()
     return peerTableModel;
 }
 
-PeerTableSortProxy* ClientModel::peerTableSortProxy()
-{
-    return m_peer_table_sort_proxy;
-}
-
 BanTableModel *ClientModel::getBanTableModel()
 {
     return banTableModel;
@@ -251,17 +241,17 @@ bool ClientModel::isReleaseVersion() const
 
 QString ClientModel::formatClientStartupTime() const
 {
-    return QDateTime::fromSecsSinceEpoch(GetStartupTime()).toString();
+    return QDateTime::fromTime_t(GetStartupTime()).toString();
 }
 
 QString ClientModel::dataDir() const
 {
-    return GUIUtil::PathToQString(gArgs.GetDataDirNet());
+    return GUIUtil::boostPathToQString(GetDataDir());
 }
 
 QString ClientModel::blocksDir() const
 {
-    return GUIUtil::PathToQString(gArgs.GetBlocksDirPath());
+    return GUIUtil::boostPathToQString(GetBlocksDir());
 }
 
 void ClientModel::updateBanlist()
@@ -329,7 +319,7 @@ static void BlockTipChanged(ClientModel* clientmodel, SynchronizationState sync_
 
     bool invoked = QMetaObject::invokeMethod(clientmodel, "numBlocksChanged", Qt::QueuedConnection,
         Q_ARG(int, tip.block_height),
-        Q_ARG(QDateTime, QDateTime::fromSecsSinceEpoch(tip.block_time)),
+        Q_ARG(QDateTime, QDateTime::fromTime_t(tip.block_time)),
         Q_ARG(QString, QString::fromStdString(tip.block_hash.ToString())),
         Q_ARG(double, verificationProgress),
         Q_ARG(bool, fHeader),
@@ -391,9 +381,9 @@ void ClientModel::unsubscribeFromCoreSignals()
 
 bool ClientModel::getProxyInfo(std::string& ip_port) const
 {
-    Proxy ipv4, ipv6;
+    proxyType ipv4, ipv6;
     if (m_node.getProxy((Network) 1, ipv4) && m_node.getProxy((Network) 2, ipv6)) {
-      ip_port = ipv4.proxy.ToStringAddrPort();
+      ip_port = ipv4.proxy.ToStringIPPort();
       return true;
     }
     return false;

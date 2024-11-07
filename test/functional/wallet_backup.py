@@ -84,7 +84,7 @@ class WalletBackupTest(BitcoinTestFramework):
         # Have the miner (node3) mine a block.
         # Must sync mempools before mining.
         self.sync_mempools()
-        self.generate(self.nodes[3], 1)
+        self.nodes[3].generate(1)
         self.sync_blocks()
 
     # As above, this mirrors the original bash test.
@@ -107,33 +107,6 @@ class WalletBackupTest(BitcoinTestFramework):
         os.remove(os.path.join(self.nodes[1].datadir, self.chain, 'wallets', self.default_wallet_name, self.wallet_data_filename))
         os.remove(os.path.join(self.nodes[2].datadir, self.chain, 'wallets', self.default_wallet_name, self.wallet_data_filename))
 
-    def restore_invalid_wallet(self):
-        node = self.nodes[3]
-        invalid_wallet_file = os.path.join(self.nodes[0].datadir, 'invalid_wallet_file.bak')
-        open(invalid_wallet_file, 'a', encoding="utf8").write('invald wallet')
-        wallet_name = "res0"
-        not_created_wallet_file = os.path.join(node.datadir, self.chain, 'wallets', wallet_name)
-        error_message = "Wallet file verification failed. Failed to load database path '{}'. Data is not in recognized format.".format(not_created_wallet_file)
-        assert_raises_rpc_error(-18, error_message, node.restorewallet, wallet_name, invalid_wallet_file)
-        assert not os.path.exists(not_created_wallet_file)
-
-    def restore_nonexistent_wallet(self):
-        node = self.nodes[3]
-        nonexistent_wallet_file = os.path.join(self.nodes[0].datadir, 'nonexistent_wallet.bak')
-        wallet_name = "res0"
-        assert_raises_rpc_error(-8, "Backup file does not exist", node.restorewallet, wallet_name, nonexistent_wallet_file)
-        not_created_wallet_file = os.path.join(node.datadir, self.chain, 'wallets', wallet_name)
-        assert not os.path.exists(not_created_wallet_file)
-
-    def restore_wallet_existent_name(self):
-        node = self.nodes[3]
-        backup_file = os.path.join(self.nodes[0].datadir, 'wallet.bak')
-        wallet_name = "res0"
-        wallet_file = os.path.join(node.datadir, self.chain, 'wallets', wallet_name)
-        error_message = "Failed to create database path '{}'. Database already exists.".format(wallet_file)
-        assert_raises_rpc_error(-36, error_message, node.restorewallet, wallet_name, backup_file)
-        assert os.path.exists(wallet_file)
-
     def init_three(self):
         self.init_wallet(0)
         self.init_wallet(1)
@@ -141,13 +114,13 @@ class WalletBackupTest(BitcoinTestFramework):
 
     def run_test(self):
         self.log.info("Generating initial blockchain")
-        self.generate(self.nodes[0], 1)
+        self.nodes[0].generate(1)
         self.sync_blocks()
-        self.generate(self.nodes[1], 1)
+        self.nodes[1].generate(1)
         self.sync_blocks()
-        self.generate(self.nodes[2], 1)
+        self.nodes[2].generate(1)
         self.sync_blocks()
-        self.generate(self.nodes[3], COINBASE_MATURITY)
+        self.nodes[3].generate(COINBASE_MATURITY)
         self.sync_blocks()
 
         assert_equal(self.nodes[0].getbalance(), 500)
@@ -163,20 +136,19 @@ class WalletBackupTest(BitcoinTestFramework):
         self.log.info("Backing up")
 
         self.nodes[0].backupwallet(os.path.join(self.nodes[0].datadir, 'wallet.bak'))
+        self.nodes[0].dumpwallet(os.path.join(self.nodes[0].datadir, 'wallet.dump'))
         self.nodes[1].backupwallet(os.path.join(self.nodes[1].datadir, 'wallet.bak'))
+        self.nodes[1].dumpwallet(os.path.join(self.nodes[1].datadir, 'wallet.dump'))
         self.nodes[2].backupwallet(os.path.join(self.nodes[2].datadir, 'wallet.bak'))
-
-        if not self.options.descriptors:
-            self.nodes[0].dumpwallet(os.path.join(self.nodes[0].datadir, 'wallet.dump'))
-            self.nodes[1].dumpwallet(os.path.join(self.nodes[1].datadir, 'wallet.dump'))
-            self.nodes[2].dumpwallet(os.path.join(self.nodes[2].datadir, 'wallet.dump'))
+        self.nodes[2].dumpwallet(os.path.join(self.nodes[2].datadir, 'wallet.dump'))
 
         self.log.info("More transactions")
         for _ in range(5):
             self.do_one_round()
 
         # Generate 101 more blocks, so any fees paid mature
-        self.generate(self.nodes[3], COINBASE_MATURITY + 1)
+        self.nodes[3].generate(COINBASE_MATURITY + 1)
+        self.sync_all()
 
         balance0 = self.nodes[0].getbalance()
         balance1 = self.nodes[1].getbalance()
@@ -191,60 +163,55 @@ class WalletBackupTest(BitcoinTestFramework):
         ##
         # Test restoring spender wallets from backups
         ##
-        self.log.info("Restoring wallets on node 3 using backup files")
+        self.log.info("Restoring using wallet.dat")
+        self.stop_three()
+        self.erase_three()
 
-        self.restore_invalid_wallet()
-        self.restore_nonexistent_wallet()
+        # Start node2 with no chain
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'blocks'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'chainstate'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'evodb'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'llmq'))
 
-        backup_file_0 = os.path.join(self.nodes[0].datadir, 'wallet.bak')
-        backup_file_1 = os.path.join(self.nodes[1].datadir, 'wallet.bak')
-        backup_file_2 = os.path.join(self.nodes[2].datadir, 'wallet.bak')
+        # Restore wallets from backup
+        shutil.copyfile(os.path.join(self.nodes[0].datadir, 'wallet.bak'), os.path.join(self.nodes[0].datadir, self.chain, 'wallets', self.default_wallet_name, self.wallet_data_filename))
+        shutil.copyfile(os.path.join(self.nodes[1].datadir, 'wallet.bak'), os.path.join(self.nodes[1].datadir, self.chain, 'wallets', self.default_wallet_name, self.wallet_data_filename))
+        shutil.copyfile(os.path.join(self.nodes[2].datadir, 'wallet.bak'), os.path.join(self.nodes[2].datadir, self.chain, 'wallets', self.default_wallet_name, self.wallet_data_filename))
 
-        self.nodes[3].restorewallet("res0", backup_file_0)
-        self.nodes[3].restorewallet("res1", backup_file_1)
-        self.nodes[3].restorewallet("res2", backup_file_2)
+        self.log.info("Re-starting nodes")
+        self.start_three()
+        self.sync_blocks()
 
-        assert os.path.exists(os.path.join(self.nodes[3].datadir, self.chain, 'wallets', "res0"))
-        assert os.path.exists(os.path.join(self.nodes[3].datadir, self.chain, 'wallets', "res1"))
-        assert os.path.exists(os.path.join(self.nodes[3].datadir, self.chain, 'wallets', "res2"))
+        assert_equal(self.nodes[0].getbalance(), balance0)
+        assert_equal(self.nodes[1].getbalance(), balance1)
+        assert_equal(self.nodes[2].getbalance(), balance2)
 
-        res0_rpc = self.nodes[3].get_wallet_rpc("res0")
-        res1_rpc = self.nodes[3].get_wallet_rpc("res1")
-        res2_rpc = self.nodes[3].get_wallet_rpc("res2")
+        self.log.info("Restoring using dumped wallet")
+        self.stop_three()
+        self.erase_three()
 
-        assert_equal(res0_rpc.getbalance(), balance0)
-        assert_equal(res1_rpc.getbalance(), balance1)
-        assert_equal(res2_rpc.getbalance(), balance2)
+        #start node2 with no chain
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'blocks'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'chainstate'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'evodb'))
+        shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'llmq'))
 
-        self.restore_wallet_existent_name()
+        self.start_three(["-nowallet"])
+        self.init_three()
 
-        if not self.options.descriptors:
-            self.log.info("Restoring using dumped wallet")
-            self.stop_three()
-            self.erase_three()
+        assert_equal(self.nodes[0].getbalance(), 0)
+        assert_equal(self.nodes[1].getbalance(), 0)
+        assert_equal(self.nodes[2].getbalance(), 0)
 
-            #start node2 with no chain
-            shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'blocks'))
-            shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'chainstate'))
-            shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'evodb'))
-            shutil.rmtree(os.path.join(self.nodes[2].datadir, self.chain, 'llmq'))
+        self.nodes[0].importwallet(os.path.join(self.nodes[0].datadir, 'wallet.dump'))
+        self.nodes[1].importwallet(os.path.join(self.nodes[1].datadir, 'wallet.dump'))
+        self.nodes[2].importwallet(os.path.join(self.nodes[2].datadir, 'wallet.dump'))
 
-            self.start_three(["-nowallet"])
-            self.init_three()
+        self.sync_blocks()
 
-            assert_equal(self.nodes[0].getbalance(), 0)
-            assert_equal(self.nodes[1].getbalance(), 0)
-            assert_equal(self.nodes[2].getbalance(), 0)
-
-            self.nodes[0].importwallet(os.path.join(self.nodes[0].datadir, 'wallet.dump'))
-            self.nodes[1].importwallet(os.path.join(self.nodes[1].datadir, 'wallet.dump'))
-            self.nodes[2].importwallet(os.path.join(self.nodes[2].datadir, 'wallet.dump'))
-
-            self.sync_blocks()
-
-            assert_equal(self.nodes[0].getbalance(), balance0)
-            assert_equal(self.nodes[1].getbalance(), balance1)
-            assert_equal(self.nodes[2].getbalance(), balance2)
+        assert_equal(self.nodes[0].getbalance(), balance0)
+        assert_equal(self.nodes[1].getbalance(), balance1)
+        assert_equal(self.nodes[2].getbalance(), balance2)
 
         # Backup to source wallet file must fail
         sourcePaths = [

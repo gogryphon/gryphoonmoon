@@ -1,4 +1,4 @@
-// Copyright (c) 2013-2020 The Bitcoin Core developers
+// Copyright (c) 2013-2015 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,6 @@
 #include <crypto/common.h>
 #include <crypto/hmac_sha512.h>
 
-#include <string>
 
 inline uint32_t ROTL32(uint32_t x, int8_t r)
 {
@@ -48,10 +47,8 @@ unsigned int MurmurHash3(unsigned int nHashSeed, Span<const unsigned char> vData
     switch (vDataToHash.size() & 3) {
         case 3:
             k1 ^= tail[2] << 16;
-            [[fallthrough]];
         case 2:
             k1 ^= tail[1] << 8;
-            [[fallthrough]];
         case 1:
             k1 ^= tail[0];
             k1 *= c1;
@@ -84,13 +81,4 @@ uint256 SHA256Uint256(const uint256& input)
     uint256 result;
     CSHA256().Write(input.begin(), 32).Finalize(result.begin());
     return result;
-}
-
-CHashWriter TaggedHash(const std::string& tag)
-{
-    CHashWriter writer(SER_GETHASH, 0);
-    uint256 taghash;
-    CSHA256().Write((const unsigned char*)tag.data(), tag.size()).Finalize(taghash.begin());
-    writer << taghash << taghash;
-    return writer;
 }

@@ -22,7 +22,7 @@ class SettingsTest(BitcoinTestFramework):
     def run_test(self):
         node, = self.nodes
         settings = Path(node.datadir, self.chain, "settings.json")
-        conf = Path(node.datadir, "dash.conf")
+        conf = Path(node.datadir, "gryphonmoon.conf")
 
         # Assert empty settings file was created
         self.stop_node(0)
@@ -83,7 +83,7 @@ class SettingsTest(BitcoinTestFramework):
         with altsettings.open("w") as fp:
             fp.write('{"key": "value"}')
         with node.assert_debug_log(expected_msgs=['Setting file arg: key = "value"']):
-            self.start_node(0, extra_args=[f"-settings={altsettings}"])
+            self.start_node(0, extra_args=["-settings={}".format(altsettings)])
             self.stop_node(0)
 
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2017-2020 The Bitcoin Core developers
+# Copyright (c) 2017-2019 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,18 +12,13 @@
 # one. Any remaining diff signals an error.
 
 export LC_ALL=C
-if test -z $1; then
+if test -z "$1"; then
     echo "Usage: $0 <commit>..."
     exit 1
 fi
 
 if ! sed --help 2>&1 | grep -q 'GNU'; then
     echo "Error: the installed sed package is not compatible. Please make sure you have GNU sed installed in your system.";
-    exit 1;
-fi
-
-if ! grep --help 2>&1 | grep -q 'GNU'; then
-    echo "Error: the installed grep package is not compatible. Please make sure you have GNU grep installed in your system.";
     exit 1;
 fi
 

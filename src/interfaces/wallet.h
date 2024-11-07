@@ -5,8 +5,8 @@
 #ifndef BITCOIN_INTERFACES_WALLET_H
 #define BITCOIN_INTERFACES_WALLET_H
 
-#include <consensus/amount.h>          // For CAmount
-#include <fs.h>
+#include <amount.h>                    // For CAmount
+#include <fs.h>                        // For fs::path
 #include <interfaces/chain.h>          // For ChainClient
 #include <pubkey.h>                    // For CKeyID and CScriptID (definitions needed in CTxDestination instantiation)
 #include <script/standard.h>           // For CTxDestination
@@ -14,14 +14,13 @@
 #include <util/message.h>
 #include <util/ui_change_type.h>
 
-#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <psbt.h>
+#include <stdint.h>
 #include <string>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -38,7 +37,7 @@ struct CRecipient;
 struct PartiallySignedTransaction;
 struct WalletContext;
 struct bilingual_str;
-using isminefilter = std::underlying_type<isminetype>::type;
+typedef uint8_t isminefilter;
 
 namespace interfaces {
 
@@ -129,11 +128,14 @@ public:
     //! Get wallet address list.
     virtual std::vector<WalletAddress> getAddresses() = 0;
 
-    //! Get receive requests.
-    virtual std::vector<std::string> getAddressReceiveRequests() = 0;
+    //! Add dest data.
+    virtual bool addDestData(const CTxDestination& dest, const std::string& key, const std::string& value) = 0;
 
-    //! Save or remove receive request.
-    virtual bool setAddressReceiveRequest(const CTxDestination& dest, const std::string& id, const std::string& value) = 0;
+    //! Erase dest data.
+    virtual bool eraseDestData(const CTxDestination& dest, const std::string& key) = 0;
+
+    //! Get dest values with prefix.
+    virtual std::vector<std::string> getDestValues(const std::string& prefix) = 0;
 
     //! Lock coin.
     virtual void lockCoin(const COutPoint& output) = 0;
@@ -207,9 +209,9 @@ public:
     virtual TransactionError fillPSBT(int sighash_type,
         bool sign,
         bool bip32derivs,
-        size_t* n_signed,
         PartiallySignedTransaction& psbtx,
-        bool& complete) = 0;
+        bool& complete,
+        size_t* n_signed) = 0;
 
     //! Get balances.
     virtual WalletBalances getBalances() = 0;
@@ -285,9 +287,6 @@ public:
     // Remove wallet.
     virtual void remove() = 0;
 
-    //! Return whether is a legacy wallet
-    virtual bool isLegacy() = 0;
-
     //! Register handler for unload message.
     using UnloadFn = std::function<void()>;
     virtual std::unique_ptr<Handler> handleUnload(UnloadFn fn) = 0;
@@ -346,9 +345,6 @@ public:
 
    //! Return default wallet directory.
    virtual std::string getWalletDir() = 0;
-
-   //! Restore backup wallet
-   virtual std::unique_ptr<Wallet> restoreWallet(const fs::path& backup_file, const std::string& wallet_name, bilingual_str& error, std::vector<bilingual_str>& warnings) = 0;
 
    //! Return available wallets in wallet directory.
    virtual std::vector<std::string> listWalletDir() = 0;
@@ -412,7 +408,6 @@ struct WalletTx
     int64_t time;
     std::map<std::string, std::string> value_map;
     bool is_coinbase;
-    bool is_platform_transfer{false};
     bool is_denominate;
 };
 

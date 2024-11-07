@@ -1,26 +1,26 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_POLICY_FEERATE_H
 #define BITCOIN_POLICY_FEERATE_H
 
-#include <consensus/amount.h>
+#include <amount.h>
 #include <serialize.h>
 
 #include <string>
 
-const std::string CURRENCY_UNIT = "DASH"; // One formatted unit
-const std::string CURRENCY_ATOM = "duff"; // One indivisible minimum value unit
+const std::string CURRENCY_UNIT = "GRYPM"; // One formatted unit
+const std::string CURRENCY_ATOM = "muff"; // One indivisible minimum value unit
 
 /* Used to determine type of fee estimation requested */
 enum class FeeEstimateMode {
     UNSET,        //!< Use default settings based on other criteria
     ECONOMICAL,   //!< Force estimateSmartFee to use non-conservative estimates
     CONSERVATIVE, //!< Force estimateSmartFee to use conservative estimates
-    DASH_KB,      //!< Use DASH/kB fee rate unit
-    DUFF_B,       //!< Use duff/B fee rate unit
+    GRYPHONMOON_KB,      //!< Use explicit GRYPM/kB fee given in coin control
+    MUFF_B,       //!< Use explicit muff/B fee given in coin control
 };
 
 /**
@@ -39,21 +39,16 @@ public:
         // We've previously had bugs creep in from silent double->int conversion...
         static_assert(std::is_integral<I>::value, "CFeeRate should be used without floats");
     }
-    /** Constructor for a fee rate in satoshis per kB (duff/kB).
-     *
-     *  Passing a num_bytes value of COIN (1e8) returns a fee rate in satoshis per B (sat/B),
-     *  e.g. (nFeePaid * 1e8 / 1e3) == (nFeePaid / 1e5),
-     *  where 1e5 is the ratio to convert from DASH/kB to sat/B.
-     */
-    CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes);
+    /** Constructor for a fee rate in satoshis per kB. The size in bytes must not exceed (2^63 - 1)*/
+    CFeeRate(const CAmount& nFeePaid, size_t nBytes);
     /**
      * Return the fee in satoshis for the given size in bytes.
      */
-    CAmount GetFee(uint32_t num_bytes) const;
+    CAmount GetFee(size_t nBytes) const;
     /**
      * Return the fee in satoshis for a size of 1000 bytes
      */
-    CAmount GetFeePerK() const { return nSatoshisPerK; }
+    CAmount GetFeePerK() const { return GetFee(1000); }
     friend bool operator<(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK < b.nSatoshisPerK; }
     friend bool operator>(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK > b.nSatoshisPerK; }
     friend bool operator==(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK == b.nSatoshisPerK; }
@@ -61,7 +56,7 @@ public:
     friend bool operator>=(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK >= b.nSatoshisPerK; }
     friend bool operator!=(const CFeeRate& a, const CFeeRate& b) { return a.nSatoshisPerK != b.nSatoshisPerK; }
     CFeeRate& operator+=(const CFeeRate& a) { nSatoshisPerK += a.nSatoshisPerK; return *this; }
-    std::string ToString(const FeeEstimateMode& fee_estimate_mode = FeeEstimateMode::DASH_KB) const;
+    std::string ToString(const FeeEstimateMode& fee_estimate_mode = FeeEstimateMode::GRYPHONMOON_KB) const;
 
     SERIALIZE_METHODS(CFeeRate, obj) { READWRITE(obj.nSatoshisPerK); }
 };

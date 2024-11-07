@@ -6,7 +6,6 @@
 #include <rpc/rawtransaction_util.h>
 
 #include <coins.h>
-#include <consensus/amount.h>
 #include <core_io.h>
 #include <interfaces/chain.h>
 #include <key_io.h>
@@ -19,21 +18,13 @@
 #include <util/strencodings.h>
 #include <validation.h>
 #include <txmempool.h>
-#include <util/translation.h>
 
 CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniValue& outputs_in, const UniValue& locktime)
 {
-    if (outputs_in.isNull()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output argument must be non-null");
-    }
+    if (inputs_in.isNull() || outputs_in.isNull())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, arguments 1 and 2 must be non-null");
 
-    UniValue inputs;
-    if (inputs_in.isNull()) {
-        inputs = UniValue::VARR;
-    } else {
-        inputs = inputs_in.get_array();
-    }
-
+    UniValue inputs = inputs_in.get_array();
     const bool outputs_is_obj = outputs_in.isObject();
     UniValue outputs = outputs_is_obj ? outputs_in.get_obj() : outputs_in.get_array();
 
@@ -58,12 +49,7 @@ CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniVal
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout cannot be negative");
 
-        uint32_t nSequence;
-        if (rawTx.nLockTime) {
-            nSequence = CTxIn::MAX_SEQUENCE_NONFINAL; /* CTxIn::SEQUENCE_FINAL - 1 */
-        } else {
-            nSequence = CTxIn::SEQUENCE_FINAL;
-        }
+        uint32_t nSequence = (rawTx.nLockTime ? CTxIn::SEQUENCE_FINAL - 1 : CTxIn::SEQUENCE_FINAL);
 
         // set the sequence number if passed in the parameters object
         const UniValue& sequenceObj = find_value(o, "sequence");
@@ -113,7 +99,7 @@ CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniVal
         } else {
             CTxDestination destination = DecodeDestination(name_);
             if (!IsValidDestination(destination)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Dash address: ") + name_);
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Gryphonmoon address: ") + name_);
             }
 
             if (!destinations.insert(destination).second) {
@@ -234,22 +220,22 @@ void SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
     int nHashType = ParseSighashString(hashType);
 
     // Script verification errors
-    std::map<int, bilingual_str> input_errors;
+    std::map<int, std::string> input_errors;
 
     bool complete = SignTransaction(mtx, keystore, coins, nHashType, input_errors);
     SignTransactionResultToJSON(mtx, complete, coins, input_errors, result);
 }
 
-void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const std::map<COutPoint, Coin>& coins, const std::map<int, bilingual_str>& input_errors, UniValue& result)
+void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const std::map<COutPoint, Coin>& coins, const std::map<int, std::string>& input_errors, UniValue& result)
 {
     // Make errors UniValue
     UniValue vErrors(UniValue::VARR);
     for (const auto& err_pair : input_errors) {
-        if (err_pair.second.original == "Missing amount") {
+        if (err_pair.second == "Missing amount") {
             // This particular error needs to be an exception for some reason
             throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing amount for %s", coins.at(mtx.vin.at(err_pair.first).prevout).out.ToString()));
         }
-        TxInErrorToJSON(mtx.vin.at(err_pair.first), vErrors, err_pair.second.original);
+        TxInErrorToJSON(mtx.vin.at(err_pair.first), vErrors, err_pair.second);
     }
 
     result.pushKV("hex", EncodeHexTx(CTransaction(mtx)));

@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -95,11 +95,8 @@ enum : uint32_t {
     //
     SCRIPT_VERIFY_NULLFAIL = (1U << 14),
 
-    // DIP0020_OPCODES - ignored.
-    // Was used to enable the opcodes listed in DIP0020
-    // (OP_CAT, OP_AND, OP_OR, OP_XOR, OP_DIV, OP_MOD, OP_SPLIT, OP_BIN2NUM,
-    // OP_NUM2BIN, OP_CHECKDATASIG, OP_CHECKDATASIGVERIFY).
-    // SCRIPT_ENABLE_DIP0020_OPCODES = (1U << 15),
+    // Enable the opcodes listed in DIP0020 (OP_CAT, OP_AND, OP_OR, OP_XOR, OP_DIV, OP_MOD, OP_SPLIT, OP_BIN2NUM, OP_NUM2BIN, OP_CHECKDATASIG, OP_CHECKDATASIGVERIFY).
+    SCRIPT_ENABLE_DIP0020_OPCODES = (1U << 15),
 
     // Making OP_CODESEPARATOR and FindAndDelete fail
     //
@@ -181,8 +178,6 @@ using MutableTransactionSignatureChecker = GenericTransactionSignatureChecker<CM
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* error = nullptr);
-
-bool CheckMinimalPush(const std::vector<unsigned char>& data, opcodetype opcode);
 
 int FindAndDelete(CScript& script, const CScript& b);
 

@@ -1,12 +1,12 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_PRIMITIVES_TRANSACTION_H
 #define BITCOIN_PRIMITIVES_TRANSACTION_H
 
-#include <consensus/amount.h>
+#include <amount.h>
 #include <script/script.h>
 #include <serialize.h>
 #include <uint256.h>
@@ -74,45 +74,25 @@ public:
     CScript scriptSig;
     uint32_t nSequence;
 
-    /**
-     * Setting nSequence to this value for every input in a transaction
-     * disables nLockTime/IsFinalTx().
-     * It fails OP_CHECKLOCKTIMEVERIFY/CheckLockTime() for any input that has
-     * it set (BIP 65).
-     * It has SEQUENCE_LOCKTIME_DISABLE_FLAG set (BIP 68/112).
-     */
+    /* Setting nSequence to this value for every input in a transaction
+     * disables nLockTime. */
     static const uint32_t SEQUENCE_FINAL = 0xffffffff;
-    /**
-     * This is the maximum sequence number that enables both nLockTime and
-     * OP_CHECKLOCKTIMEVERIFY (BIP 65).
-     * It has SEQUENCE_LOCKTIME_DISABLE_FLAG set (BIP 68/112).
-     */
-    static const uint32_t MAX_SEQUENCE_NONFINAL{SEQUENCE_FINAL - 1};
 
-    // Below flags apply in the context of BIP 68. BIP 68 requires the tx
-    // version to be set to 2, or higher.
-    /**
-     * If this flag is set, CTxIn::nSequence is NOT interpreted as a
-     * relative lock-time.
-     * It skips SequenceLocks() for any input that has it set (BIP 68).
-     * It fails OP_CHECKSEQUENCEVERIFY/CheckSequence() for any input that has
-     * it set (BIP 112).
-     */
+    /* Below flags apply in the context of BIP 68*/
+    /* If this flag set, CTxIn::nSequence is NOT interpreted as a
+     * relative lock-time. */
     static const uint32_t SEQUENCE_LOCKTIME_DISABLE_FLAG = (1U << 31);
 
-    /**
-     * If CTxIn::nSequence encodes a relative lock-time and this flag
+    /* If CTxIn::nSequence encodes a relative lock-time and this flag
      * is set, the relative lock-time has units of 512 seconds,
      * otherwise it specifies blocks with a granularity of 1. */
     static const uint32_t SEQUENCE_LOCKTIME_TYPE_FLAG = (1 << 22);
 
-    /**
-     * If CTxIn::nSequence encodes a relative lock-time, this mask is
+    /* If CTxIn::nSequence encodes a relative lock-time, this mask is
      * applied to extract that lock-time from the sequence field. */
     static const uint32_t SEQUENCE_LOCKTIME_MASK = 0x0000ffff;
 
-    /**
-     * In order to use the same number of bits to encode roughly the
+    /* In order to use the same number of bits to encode roughly the
      * same wall-clock duration, and because blocks are naturally
      * limited to occur every 600s on average, the minimum granularity
      * for time-based relative lock-time is fixed at 512 seconds.
@@ -204,8 +184,12 @@ class CTransaction
 public:
     // Default transaction version.
     static const int32_t CURRENT_VERSION=2;
-    // Special transaction version
-    static const int32_t SPECIAL_VERSION = 3;
+
+    // Changing the default transaction version requires a two step process: first
+    // adapting relay policy by bumping MAX_STANDARD_VERSION, and then later date
+    // bumping the default CURRENT_VERSION at which point both CURRENT_VERSION and
+    // MAX_STANDARD_VERSION will be equal.
+    static const int32_t MAX_STANDARD_VERSION=3;
 
     // The local variables are made const to prevent unintended modification
     // without updating the cached hash value. However, CTransaction is not
@@ -226,9 +210,12 @@ private:
     uint256 ComputeHash() const;
 
 public:
+    /** Construct a CTransaction that qualifies as IsNull() */
+    CTransaction();
+
     /** Convert a CMutableTransaction into a CTransaction. */
-    explicit CTransaction(const CMutableTransaction& tx);
-    CTransaction(CMutableTransaction&& tx);
+    explicit CTransaction(const CMutableTransaction &tx);
+    CTransaction(CMutableTransaction &&tx);
 
     template <typename Stream>
     inline void Serialize(Stream& s) const {
@@ -237,7 +224,7 @@ public:
         s << vin;
         s << vout;
         s << nLockTime;
-        if (this->HasExtraPayloadField())
+        if (this->nVersion == 3 && this->nType != TRANSACTION_NORMAL)
             s << vExtraPayload;
     }
 
@@ -278,21 +265,6 @@ public:
     }
 
     std::string ToString() const;
-
-    bool IsSpecialTxVersion() const noexcept
-    {
-        return nVersion >= SPECIAL_VERSION;
-    }
-
-    bool IsPlatformTransfer() const noexcept
-    {
-        return IsSpecialTxVersion() && nType == TRANSACTION_ASSET_UNLOCK;
-    }
-
-    bool HasExtraPayloadField() const noexcept
-    {
-        return IsSpecialTxVersion() && nType != TRANSACTION_NORMAL;
-    }
 };
 
 /** A mutable version of CTransaction. */
@@ -316,7 +288,7 @@ struct CMutableTransaction
         SER_READ(obj, obj.nVersion = (int16_t) (n32bitVersion & 0xffff));
         SER_READ(obj, obj.nType = (uint16_t) ((n32bitVersion >> 16) & 0xffff));
         READWRITE(obj.vin, obj.vout, obj.nLockTime);
-        if (obj.nVersion >= CTransaction::SPECIAL_VERSION && obj.nType != TRANSACTION_NORMAL) {
+        if (obj.nVersion == 3 && obj.nType != TRANSACTION_NORMAL) {
             READWRITE(obj.vExtraPayload);
         }
     }
@@ -335,6 +307,7 @@ struct CMutableTransaction
 };
 
 typedef std::shared_ptr<const CTransaction> CTransactionRef;
+static inline CTransactionRef MakeTransactionRef() { return std::make_shared<const CTransaction>(); }
 template <typename Tx> static inline CTransactionRef MakeTransactionRef(Tx&& txIn) { return std::make_shared<const CTransaction>(std::forward<Tx>(txIn)); }
 
 /** Implementation of BIP69

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018-2020 The Bitcoin Core developers
+# Copyright (c) 2018 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,14 +23,14 @@ class CreateTxWalletTest(BitcoinTestFramework):
 
     def test_anti_fee_sniping(self):
         self.log.info('Check that we have some (old) blocks and that anti-fee-sniping is disabled')
-        self.bump_mocktime(8 * 60 * 60 + 1, update_schedulers=False)
+        self.bump_mocktime(8 * 60 * 60 + 1)
         assert_equal(self.nodes[0].getblockchaininfo()['blocks'], 200)
         txid = self.nodes[0].sendtoaddress(self.nodes[0].getnewaddress(), 1)
         tx = self.nodes[0].decoderawtransaction(self.nodes[0].gettransaction(txid)['hex'])
         assert_equal(tx['locktime'], 0)
 
         self.log.info('Check that anti-fee-sniping is enabled when we mine a recent block')
-        self.generate(self.nodes[0], 1)
+        self.nodes[0].generate(1)
         txid = self.nodes[0].sendtoaddress(self.nodes[0].getnewaddress(), 1)
         tx = self.nodes[0].decoderawtransaction(self.nodes[0].gettransaction(txid)['hex'])
         assert 0 < tx['locktime'] <= 201

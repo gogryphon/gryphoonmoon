@@ -22,8 +22,3 @@ __pycache__
 tools/clojure/.lein*
 
 *.pyc
-
-/result*
-
-.build
-.swiftpm

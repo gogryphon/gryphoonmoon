@@ -41,7 +41,7 @@ FUZZ_TARGET_INIT(transaction, initialize_transaction)
             return CTransaction(deserialize, ds);
         } catch (const std::ios_base::failure&) {
             valid_tx = false;
-            return CTransaction{CMutableTransaction{}};
+            return CTransaction();
         }
     }();
     bool valid_mutable_tx = true;
@@ -94,6 +94,16 @@ FUZZ_TARGET_INIT(transaction, initialize_transaction)
     (void)AreInputsStandard(tx, coins_view_cache);
 
     UniValue u(UniValue::VOBJ);
-    TxToUniv(tx, /* hashBlock */ uint256::ZERO, /* include_addresses */ true, u);
-    TxToUniv(tx, /* hashBlock */ uint256::ONE, /* include_addresses */ false, u);
+    // ValueFromAmount(i) not defined when i == std::numeric_limits<int64_t>::min()
+    bool skip_tx_to_univ = false;
+    for (const CTxOut& txout : tx.vout) {
+        if (txout.nValue == std::numeric_limits<int64_t>::min()) {
+            skip_tx_to_univ = true;
+        }
+    }
+    if (!skip_tx_to_univ) {
+        TxToUniv(tx, /* hashBlock */ {}, u);
+        static const uint256 u256_max(uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
+        TxToUniv(tx, u256_max, u);
+    }
 }

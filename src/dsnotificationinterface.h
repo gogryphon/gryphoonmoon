@@ -7,28 +7,20 @@
 
 #include <validationinterface.h>
 
-class CActiveMasternodeManager;
 class CConnman;
 class CDeterministicMNManager;
 class CGovernanceManager;
-class ChainstateManager;
 class CMasternodeSync;
-class PeerManager;
 struct CJContext;
 struct LLMQContext;
 
 class CDSNotificationInterface : public CValidationInterface
 {
 public:
-    explicit CDSNotificationInterface(CConnman& connman,
-                                      CMasternodeSync& mn_sync,
-                                      CGovernanceManager& govman,
-                                      PeerManager& peerman,
-                                      const ChainstateManager& chainman,
-                                      const CActiveMasternodeManager* const mn_activeman,
-                                      const std::unique_ptr<CDeterministicMNManager>& dmnman,
-                                      const std::unique_ptr<LLMQContext>& llmq_ctx,
-                                      const std::unique_ptr<CJContext>& cj_ctx);
+    explicit CDSNotificationInterface(CConnman& _connman,
+                                      CMasternodeSync& _mn_sync, const std::unique_ptr<CDeterministicMNManager>& _dmnman,
+                                      CGovernanceManager& _govman, const std::unique_ptr<LLMQContext>& _llmq_ctx,
+                                      const std::unique_ptr<CJContext>& _cj_ctx);
     virtual ~CDSNotificationInterface() = default;
 
     // a small helper to initialize current block height in sub-modules on startup
@@ -40,26 +32,22 @@ protected:
     void NotifyHeaderTip(const CBlockIndex *pindexNew, bool fInitialDownload) override;
     void SynchronousUpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) override;
     void UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) override;
-    void TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime, uint64_t mempool_sequence) override;
-    void TransactionRemovedFromMempool(const CTransactionRef& ptx, MemPoolRemovalReason reason,
-                                       uint64_t mempool_sequence) override;
+    void TransactionAddedToMempool(const CTransactionRef& tx, int64_t nAcceptTime) override;
+    void TransactionRemovedFromMempool(const CTransactionRef& ptx, MemPoolRemovalReason reason) override;
     void BlockConnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindex) override;
     void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindexDisconnected) override;
     void NotifyMasternodeListChanged(bool undo, const CDeterministicMNList& oldMNList, const CDeterministicMNListDiff& diff) override;
     void NotifyChainLock(const CBlockIndex* pindex, const std::shared_ptr<const llmq::CChainLockSig>& clsig) override;
 
 private:
-    CConnman& m_connman;
-    CMasternodeSync& m_mn_sync;
-    CGovernanceManager& m_govman;
-    PeerManager& m_peerman;
-    const ChainstateManager& m_chainman;
-    const CActiveMasternodeManager* const m_mn_activeman;
-    const std::unique_ptr<CDeterministicMNManager>& m_dmnman;
-    const std::unique_ptr<LLMQContext>& m_llmq_ctx;
-    const std::unique_ptr<CJContext>& m_cj_ctx;
-};
+    CConnman& connman;
 
-extern std::unique_ptr<CDSNotificationInterface> g_ds_notification_interface;
+    CMasternodeSync& m_mn_sync;
+    const std::unique_ptr<CDeterministicMNManager>& dmnman;
+    CGovernanceManager& govman;
+
+    const std::unique_ptr<LLMQContext>& llmq_ctx;
+    const std::unique_ptr<CJContext>& cj_ctx;
+};
 
 #endif // BITCOIN_DSNOTIFICATIONINTERFACE_H

@@ -12,8 +12,6 @@
 #include <immer/refcount/no_refcount_policy.hpp>
 #include <immer/set.hpp>
 
-#include <immer/algorithm.hpp>
-
 #include <array>
 
 using st_memory = immer::memory_policy<immer::heap_policy<immer::cpp_heap>,
@@ -46,8 +44,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
             op_erase,
             op_insert_move,
             op_erase_move,
-            op_iterate,
-            op_diff
+            op_iterate
         };
         auto src = read<char>(in, is_valid_var);
         auto dst = read<char>(in, is_valid_var);
@@ -69,7 +66,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
         }
         case op_erase_move: {
             auto value = read<size_t>(in);
-            vars[dst]  = std::move(vars[src]).erase(value);
+            vars[dst]  = vars[src].erase(value);
             break;
         }
         case op_iterate: {
@@ -78,22 +75,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
                 vars[dst] = vars[dst].insert(v);
             }
             break;
-        }
-        case op_diff: {
-            auto&& a = vars[src];
-            auto&& b = vars[dst];
-            diff(
-                a,
-                b,
-                [&](auto&& x) {
-                    assert(!a.count(x));
-                    assert(b.count(x));
-                },
-                [&](auto&& x) {
-                    assert(a.count(x));
-                    assert(!b.count(x));
-                },
-                [&](auto&& x, auto&& y) { assert(false); });
         }
         default:
             break;

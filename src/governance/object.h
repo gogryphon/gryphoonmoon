@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,17 +13,12 @@
 
 #include <univalue.h>
 
-class CActiveMasternodeManager;
+class CBLSSecretKey;
 class CBLSPublicKey;
-class CDeterministicMNList;
-class CGovernanceManager;
+class CNode;
+
 class CGovernanceObject;
 class CGovernanceVote;
-class ChainstateManager;
-class CMasternodeMetaMan;
-class CMasternodeSync;
-class CNode;
-class PeerManager;
 
 extern RecursiveMutex cs_main;
 
@@ -103,37 +98,37 @@ private:
     Governance::Object m_obj;
 
     /// time this object was marked for deletion
-    int64_t nDeletionTime{0};
+    int64_t nDeletionTime;
 
 
     /// is valid by blockchain
-    bool fCachedLocalValidity{false};
+    bool fCachedLocalValidity;
     std::string strLocalValidityError;
 
     // VARIOUS FLAGS FOR OBJECT / SET VIA MASTERNODE VOTING
 
     /// true == minimum network support has been reached for this object to be funded (doesn't mean it will for sure though)
-    bool fCachedFunding{false};
+    bool fCachedFunding;
 
     /// true == minimum network has been reached flagging this object as a valid and understood governance object (e.g, the serialized data is correct format, etc)
-    bool fCachedValid{true};
+    bool fCachedValid;
 
     /// true == minimum network support has been reached saying this object should be deleted from the system entirely
-    bool fCachedDelete{false};
+    bool fCachedDelete;
 
     /** true == minimum network support has been reached flagging this object as endorsed by an elected representative body
      * (e.g. business review board / technical review board /etc)
      */
-    bool fCachedEndorsed{false};
+    bool fCachedEndorsed;
 
     /// object was updated and cached values should be updated soon
-    bool fDirtyCache{true};
+    bool fDirtyCache;
 
     /// Object is no longer of interest
-    bool fExpired{false};
+    bool fExpired;
 
     /// Failed to parse object data
-    bool fUnparsable{false};
+    bool fUnparsable;
 
     vote_m_t mapCurrentMNVotes;
 
@@ -221,24 +216,23 @@ public:
     // Signature related functions
 
     void SetMasternodeOutpoint(const COutPoint& outpoint);
-    bool Sign(const CActiveMasternodeManager& mn_activeman);
+    bool Sign(const CBLSSecretKey& key);
     bool CheckSignature(const CBLSPublicKey& pubKey) const;
 
     uint256 GetSignatureHash() const;
 
     // CORE OBJECT FUNCTIONS
 
-    bool IsValidLocally(const CDeterministicMNList& tip_mn_list, const ChainstateManager& chainman, std::string& strError, bool fCheckCollateral) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool IsValidLocally(std::string& strError, bool fCheckCollateral) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    bool IsValidLocally(const CDeterministicMNList& tip_mn_list, const ChainstateManager& chainman, std::string& strError, bool& fMissingConfirmations, bool fCheckCollateral) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool IsValidLocally(std::string& strError, bool& fMissingConfirmations, bool fCheckCollateral) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     /// Check the collateral transaction for the budget proposal/finalized budget
-    bool IsCollateralValid(const ChainstateManager& chainman, std::string& strError, bool& fMissingConfirmations) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool IsCollateralValid(std::string& strError, bool& fMissingConfirmations) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    void UpdateLocalValidity(const CDeterministicMNList& tip_mn_list, const ChainstateManager& chainman)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void UpdateLocalValidity();
 
-    void UpdateSentinelVariables(const CDeterministicMNList& tip_mn_list);
+    void UpdateSentinelVariables();
 
     void PrepareDeletion(int64_t nDeletionTime_)
     {
@@ -252,20 +246,20 @@ public:
 
     UniValue GetJSONObject() const;
 
-    void Relay(PeerManager& peerman, const CMasternodeSync& mn_sync) const;
+    void Relay(CConnman& connman) const;
 
     uint256 GetHash() const;
     uint256 GetDataHash() const;
 
     // GET VOTE COUNT FOR SIGNAL
 
-    int CountMatchingVotes(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn, vote_outcome_enum_t eVoteOutcomeIn) const;
+    int CountMatchingVotes(vote_signal_enum_t eVoteSignalIn, vote_outcome_enum_t eVoteOutcomeIn) const;
 
-    int GetAbsoluteYesCount(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn) const;
-    int GetAbsoluteNoCount(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn) const;
-    int GetYesCount(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn) const;
-    int GetNoCount(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn) const;
-    int GetAbstainCount(const CDeterministicMNList& tip_mn_list, vote_signal_enum_t eVoteSignalIn) const;
+    int GetAbsoluteYesCount(vote_signal_enum_t eVoteSignalIn) const;
+    int GetAbsoluteNoCount(vote_signal_enum_t eVoteSignalIn) const;
+    int GetYesCount(vote_signal_enum_t eVoteSignalIn) const;
+    int GetNoCount(vote_signal_enum_t eVoteSignalIn) const;
+    int GetAbstainCount(vote_signal_enum_t eVoteSignalIn) const;
 
     bool GetCurrentMNVotes(const COutPoint& mnCollateralOutpoint, vote_rec_t& voteRecord) const;
 
@@ -294,17 +288,16 @@ public:
     void LoadData();
     void GetData(UniValue& objResult) const;
 
-    bool ProcessVote(CMasternodeMetaMan& mn_metaman, CGovernanceManager& govman, const CDeterministicMNList& tip_mn_list,
-                     const CGovernanceVote& vote, CGovernanceException& exception);
+    bool ProcessVote(const CGovernanceVote& vote, CGovernanceException& exception);
 
     /// Called when MN's which have voted on this object have been removed
-    void ClearMasternodeVotes(const CDeterministicMNList& tip_mn_list);
+    void ClearMasternodeVotes();
 
     // Revalidate all votes from this MN and delete them if validation fails.
     // This is the case for DIP3 MNs that changed voting or operator keys and
     // also for MNs that were removed from the list completely.
     // Returns deleted vote hashes.
-    std::set<uint256> RemoveInvalidVotes(const CDeterministicMNList& tip_mn_list, const COutPoint& mnOutpoint);
+    std::set<uint256> RemoveInvalidVotes(const COutPoint& mnOutpoint);
 };
 
 

@@ -1,0 +1,11 @@
+[Protocol]
+exec=gryphonmoon-qt '%u'
+protocol=gryphonmoon
+input=none
+output=none
+helper=true
+listing=
+reading=false
+writing=false
+makedir=false
+deleting=false

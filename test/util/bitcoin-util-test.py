@@ -10,6 +10,7 @@ Runs automatically during `make check`.
 Can also be run manually."""
 
 import argparse
+import binascii
 import configparser
 import difflib
 import json
@@ -151,7 +152,7 @@ def bctest(testDir, testObj, buildenv):
         want_error = testObj["error_txt"]
         # Compare error text
         # TODO: ideally, we'd compare the strings exactly and also assert
-        # That stderr is empty if no errors are expected. However, dash-tx
+        # That stderr is empty if no errors are expected. However, gryphonmoon-tx
         # emits DISPLAY errors when running as a windows application on
         # linux through wine. Just assert that the expected error text appears
         # somewhere in stderr.
@@ -166,7 +167,7 @@ def parse_output(a, fmt):
     if fmt == 'json':  # json: compare parsed data
         return json.loads(a)
     elif fmt == 'hex':  # hex: parse and compare binary data
-        return bytes.fromhex(a.strip())
+        return binascii.a2b_hex(a.strip())
     else:
         raise NotImplementedError("Don't know how to compare %s" % fmt)
 

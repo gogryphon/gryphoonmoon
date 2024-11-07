@@ -12,11 +12,11 @@
 #include <netaddress.h>
 #include <netbase.h>
 #include <random.h>
+#include <util/strencodings.h>
 #include <tinyformat.h>
 #include <util/readwritefile.h>
 #include <util/sock.h>
 #include <util/spanparsing.h>
-#include <util/strencodings.h>
 #include <util/system.h>
 
 #include <chrono>
@@ -116,19 +116,8 @@ namespace sam {
 Session::Session(const fs::path& private_key_file,
                  const CService& control_host,
                  CThreadInterrupt* interrupt)
-    : m_private_key_file{private_key_file},
-      m_control_host{control_host},
-      m_interrupt{interrupt},
-      m_control_sock{std::make_unique<Sock>(INVALID_SOCKET)},
-      m_transient{false}
-{
-}
-
-Session::Session(const CService& control_host, CThreadInterrupt* interrupt)
-    : m_control_host{control_host},
-      m_interrupt{interrupt},
-      m_control_sock{std::make_unique<Sock>(INVALID_SOCKET)},
-      m_transient{true}
+    : m_private_key_file(private_key_file), m_control_host(control_host), m_interrupt(interrupt),
+      m_control_sock(std::make_unique<Sock>(INVALID_SOCKET))
 {
 }
 
@@ -186,7 +175,6 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
     // Refuse connecting to arbitrary ports. We don't specify any destination port to the SAM proxy
     // when connecting (SAM 3.1 does not use ports) and it forces/defaults it to I2P_SAM31_PORT.
     if (to.GetPort() != I2P_SAM31_PORT) {
-        Log("Error connecting to %s, connection refused due to arbitrary port %s", to.ToStringAddrPort(), to.GetPort());
         proxy_error = false;
         return false;
     }
@@ -207,7 +195,7 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
         }
 
         const Reply& lookup_reply =
-            SendRequestAndGetReply(*sock, strprintf("NAMING LOOKUP NAME=%s", to.ToStringAddr()));
+            SendRequestAndGetReply(*sock, strprintf("NAMING LOOKUP NAME=%s", to.ToStringIP()));
 
         const std::string& dest = lookup_reply.Get("VALUE");
 
@@ -234,7 +222,7 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
 
         throw std::runtime_error(strprintf("\"%s\"", connect_reply.full));
     } catch (const std::runtime_error& e) {
-        Log("Error connecting to %s: %s", to.ToStringAddrPort(), e.what());
+        Log("Error connecting to %s: %s", to.ToString(), e.what());
         CheckControlSock();
         return false;
     }
@@ -303,7 +291,7 @@ std::unique_ptr<Sock> Session::Hello() const
     }
 
     if (!ConnectSocketDirectly(m_control_host, *sock, nConnectTimeout, true)) {
-        throw std::runtime_error(strprintf("Cannot connect to %s", m_control_host.ToStringAddrPort()));
+        throw std::runtime_error(strprintf("Cannot connect to %s", m_control_host.ToString()));
     }
 
     SendRequestAndGetReply(*sock, "HELLO VERSION MIN=3.1 MAX=3.1");
@@ -327,7 +315,6 @@ void Session::DestGenerate(const Sock& sock)
     // https://geti2p.net/spec/common-structures#key-certificates
     // "7" or "EdDSA_SHA512_Ed25519" - "Recent Router Identities and Destinations".
     // Use "7" because i2pd <2.24.0 does not recognize the textual form.
-    // If SIGNATURE_TYPE is not specified, then the default one is DSA_SHA1.
     const Reply& reply = SendRequestAndGetReply(sock, "DEST GENERATE SIGNATURE_TYPE=7", false);
 
     m_private_key = DecodeI2PBase64(reply.Get("PRIV"));
@@ -341,7 +328,7 @@ void Session::GenerateAndSavePrivateKey(const Sock& sock)
     if (!WriteBinaryFile(m_private_key_file,
                          std::string(m_private_key.begin(), m_private_key.end()))) {
         throw std::runtime_error(
-            strprintf("Cannot save I2P private key to %s", fs::quoted(fs::PathToString(m_private_key_file))));
+            strprintf("Cannot save I2P private key to %s", m_private_key_file));
     }
 }
 
@@ -369,50 +356,29 @@ void Session::CreateIfNotCreatedAlready()
         return;
     }
 
-    const auto session_type = m_transient ? "transient" : "persistent";
-    const auto session_id = GetRandHash().GetHex().substr(0, 10); // full is overkill, too verbose in the logs
-
-    Log("Creating %s SAM session %s with %s", session_type, session_id, m_control_host.ToStringAddrPort());
+    Log("Creating SAM session with %s", m_control_host.ToString());
 
     auto sock = Hello();
 
-    if (m_transient) {
-        // The destination (private key) is generated upon session creation and returned
-        // in the reply in DESTINATION=.
-        const Reply& reply = SendRequestAndGetReply(
-            *sock,
-            strprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=TRANSIENT SIGNATURE_TYPE=7 "
-                      "i2cp.leaseSetEncType=4,0 inbound.quantity=1 outbound.quantity=1",
-                      session_id));
-
-        m_private_key = DecodeI2PBase64(reply.Get("DESTINATION"));
+    const auto& [read_ok, data] = ReadBinaryFile(m_private_key_file);
+    if (read_ok) {
+        m_private_key.assign(data.begin(), data.end());
     } else {
-        // Read our persistent destination (private key) from disk or generate
-        // one and save it to disk. Then use it when creating the session.
-        const auto& [read_ok, data] = ReadBinaryFile(m_private_key_file);
-        if (read_ok) {
-            m_private_key.assign(data.begin(), data.end());
-        } else {
-            GenerateAndSavePrivateKey(*sock);
-        }
-
-        const std::string& private_key_b64 = SwapBase64(EncodeBase64(m_private_key));
-
-        SendRequestAndGetReply(*sock,
-                               strprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=%s "
-                                         "i2cp.leaseSetEncType=4,0 inbound.quantity=3 outbound.quantity=3",
-                                         session_id,
-                                         private_key_b64));
+        GenerateAndSavePrivateKey(*sock);
     }
+
+    const std::string& session_id = GetRandHash().GetHex().substr(0, 10); // full is an overkill, too verbose in the logs
+    const std::string& private_key_b64 = SwapBase64(EncodeBase64(m_private_key));
+
+    SendRequestAndGetReply(*sock, strprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=%s",
+                                            session_id, private_key_b64));
 
     m_my_addr = CService(DestBinToAddr(MyDestination()), I2P_SAM31_PORT);
     m_session_id = session_id;
     m_control_sock = std::move(sock);
 
-    Log("%s SAM session %s created, my address=%s",
-        Capitalize(session_type),
-        m_session_id,
-        m_my_addr.ToStringAddrPort());
+    LogPrintf("I2P: SAM session created: session id=%s, my address=%s\n", m_session_id,
+              m_my_addr.ToString());
 }
 
 std::unique_ptr<Sock> Session::StreamAccept()
@@ -440,9 +406,9 @@ void Session::Disconnect()
 {
     if (m_control_sock->Get() != INVALID_SOCKET) {
         if (m_session_id.empty()) {
-            Log("Destroying incomplete SAM session");
+            Log("Destroying incomplete session");
         } else {
-            Log("Destroying SAM session %s", m_session_id);
+            Log("Destroying session %s", m_session_id);
         }
     }
     m_control_sock->Reset();

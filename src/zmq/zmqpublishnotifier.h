@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 The Bitcoin Core developers
+// Copyright (c) 2015 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,6 @@
 #include <zmq/zmqabstractnotifier.h>
 
 class CBlockIndex;
-class CDeterministicMNList;
 class CGovernanceVote;
 
 namespace Governance
@@ -63,7 +62,7 @@ public:
 class CZMQPublishHashGovernanceVoteNotifier : public CZMQAbstractPublishNotifier
 {
 public:
-    bool NotifyGovernanceVote(const CDeterministicMNList& tip_mn_list, const std::shared_ptr<const CGovernanceVote>& vote) override;
+    bool NotifyGovernanceVote(const std::shared_ptr<const CGovernanceVote>& vote) override;
 };
 
 class CZMQPublishHashGovernanceObjectNotifier : public CZMQAbstractPublishNotifier
@@ -108,15 +107,6 @@ public:
     bool NotifyTransaction(const CTransaction &transaction) override;
 };
 
-class CZMQPublishSequenceNotifier : public CZMQAbstractPublishNotifier
-{
-public:
-    bool NotifyBlockConnect(const CBlockIndex *pindex) override;
-    bool NotifyBlockDisconnect(const CBlockIndex *pindex) override;
-    bool NotifyTransactionAcceptance(const CTransaction &transaction, uint64_t mempool_sequence) override;
-    bool NotifyTransactionRemoval(const CTransaction &transaction, uint64_t mempool_sequence) override;
-};
-
 class CZMQPublishRawTransactionLockNotifier : public CZMQAbstractPublishNotifier
 {
 public:
@@ -132,7 +122,7 @@ public:
 class CZMQPublishRawGovernanceVoteNotifier : public CZMQAbstractPublishNotifier
 {
 public:
-    bool NotifyGovernanceVote(const CDeterministicMNList& tip_mn_list, const std::shared_ptr<const CGovernanceVote>& vote) override;
+    bool NotifyGovernanceVote(const std::shared_ptr<const CGovernanceVote>& vote) override;
 };
 
 class CZMQPublishRawGovernanceObjectNotifier : public CZMQAbstractPublishNotifier

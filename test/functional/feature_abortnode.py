@@ -2,12 +2,12 @@
 # Copyright (c) 2019-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-"""Test dashd aborts if can't disconnect a block.
+"""Test gryphonmoond aborts if can't disconnect a block.
 
 - Start a single node and generate 3 blocks.
 - Delete the undo data.
 - Mine a fork that requires disconnecting the tip.
-- Verify that dashd AbortNode's.
+- Verify that gryphonmoond AbortNode's.
 """
 
 from test_framework.test_framework import BitcoinTestFramework
@@ -26,7 +26,7 @@ class AbortNodeTest(BitcoinTestFramework):
         # We'll connect the nodes later
 
     def run_test(self):
-        self.generate(self.nodes[0], 3, sync_fun=self.no_op)
+        self.nodes[0].generate(3)
         datadir = get_datadir_path(self.options.tmpdir, 0)
 
         # Deleting the undo file will result in reorg failure
@@ -34,10 +34,10 @@ class AbortNodeTest(BitcoinTestFramework):
 
         # Connecting to a node with a more work chain will trigger a reorg
         # attempt.
-        self.generate(self.nodes[1], 3, sync_fun=self.no_op)
+        self.nodes[1].generate(3)
         with self.nodes[0].assert_debug_log(["Failed to disconnect block"]):
             self.connect_nodes(0, 1)
-            self.generate(self.nodes[1], 1, sync_fun=self.no_op)
+            self.nodes[1].generate(1)
 
             # Check that node0 aborted
             self.log.info("Waiting for crash")

@@ -1,11 +1,11 @@
-// Copyright (c) 2023-2024 The Dash Core developers
+// Copyright (c) 2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_EVO_DMN_TYPES_H
 #define BITCOIN_EVO_DMN_TYPES_H
 
-#include <consensus/amount.h>
+#include <amount.h>
 
 #include <limits>
 #include <string_view>
@@ -31,12 +31,12 @@ struct mntype_struct
 
 constexpr auto Regular = mntype_struct{
     .voting_weight = 1,
-    .collat_amount = 1000 * COIN,
+    .collat_amount = 900000 * COIN,
     .description = "Regular",
 };
 constexpr auto Evo = mntype_struct{
-    .voting_weight = 4,
-    .collat_amount = 4000 * COIN,
+    .voting_weight = 1,    
+    .collat_amount = MAX_MONEY,
     .description = "Evo",
 };
 constexpr auto Invalid = mntype_struct{
@@ -62,6 +62,9 @@ constexpr auto Invalid = mntype_struct{
     }
 }
 
-[[nodiscard]] constexpr bool IsValidMnType(MnType type) { return type < MnType::COUNT; }
+[[nodiscard]] constexpr const bool IsValidMnType(MnType type)
+{
+    return type < MnType::COUNT;
+}
 
 #endif // BITCOIN_EVO_DMN_TYPES_H

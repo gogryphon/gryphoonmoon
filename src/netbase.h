@@ -18,7 +18,6 @@
 #include <memory>
 #include <stdint.h>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 extern int nConnectTimeout;
@@ -30,30 +29,11 @@ static const int DEFAULT_CONNECT_TIMEOUT = 5000;
 static const int DEFAULT_NAME_LOOKUP = true;
 static const bool DEFAULT_ALLOWPRIVATENET = false;
 
-enum class ConnectionDirection {
-    None = 0,
-    In = (1U << 0),
-    Out = (1U << 1),
-    Both = (In | Out),
-    Verified = (1U << 2),
-    VerifiedIn = (Verified | In),
-    VerifiedOut = (Verified | Out),
-};
-static inline ConnectionDirection& operator|=(ConnectionDirection& a, ConnectionDirection b) {
-    using underlying = typename std::underlying_type<ConnectionDirection>::type;
-    a = ConnectionDirection(underlying(a) | underlying(b));
-    return a;
-}
-static inline bool operator&(ConnectionDirection a, ConnectionDirection b) {
-    using underlying = typename std::underlying_type<ConnectionDirection>::type;
-    return (underlying(a) & underlying(b));
-}
-
-class Proxy
+class proxyType
 {
 public:
-    Proxy(): randomize_credentials(false) {}
-    explicit Proxy(const CService &_proxy, bool _randomize_credentials=false): proxy(_proxy), randomize_credentials(_randomize_credentials) {}
+    proxyType(): randomize_credentials(false) {}
+    explicit proxyType(const CService &_proxy, bool _randomize_credentials=false): proxy(_proxy), randomize_credentials(_randomize_credentials) {}
 
     bool IsValid() const { return proxy.IsValid(); }
 
@@ -77,8 +57,8 @@ enum Network ParseNetwork(const std::string& net);
 std::string GetNetworkName(enum Network net);
 /** Return a vector of publicly routable Network names; optionally append NET_UNROUTABLE. */
 std::vector<std::string> GetNetworkNames(bool append_unroutable = false);
-bool SetProxy(enum Network net, const Proxy &addrProxy);
-bool GetProxy(enum Network net, Proxy &proxyInfoOut);
+bool SetProxy(enum Network net, const proxyType &addrProxy);
+bool GetProxy(enum Network net, proxyType &proxyInfoOut);
 bool IsProxy(const CNetAddr &addr);
 /**
  * Set the name proxy to use for all connections to nodes specified by a
@@ -96,9 +76,9 @@ bool IsProxy(const CNetAddr &addr);
  *       server in common use (most notably Tor) actually implements UDP
  *       support, and a DNS resolver is beyond the scope of this project.
  */
-bool SetNameProxy(const Proxy &addrProxy);
+bool SetNameProxy(const proxyType &addrProxy);
 bool HaveNameProxy();
-bool GetNameProxy(Proxy &nameProxyOut);
+bool GetNameProxy(proxyType &nameProxyOut);
 
 using DNSLookupFn = std::function<std::vector<CNetAddr>(const std::string&, bool)>;
 extern DNSLookupFn g_dns_lookup;
@@ -109,25 +89,24 @@ extern DNSLookupFn g_dns_lookup;
  * @param name    The string representing a host. Could be a name or a numerical
  *                IP address (IPv6 addresses in their bracketed form are
  *                allowed).
+ * @param[out] vIP The resulting network addresses to which the specified host
+ *                 string resolved.
  *
- * @returns The resulting network addresses to which the specified host
- *          string resolved.
+ * @returns Whether or not the specified host string successfully resolved to
+ *          any resulting network addresses.
  *
- * @see Lookup(const std::string&, uint16_t, bool, unsigned int, DNSLookupFn)
+ * @see Lookup(const std::string&, std::vector<CService>&, uint16_t, bool, unsigned int, DNSLookupFn)
  *      for additional parameter descriptions.
  */
-std::vector<CNetAddr> LookupHost(const std::string& name, unsigned int nMaxSolutions, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
+bool LookupHost(const std::string& name, std::vector<CNetAddr>& vIP, unsigned int nMaxSolutions, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
 
 /**
  * Resolve a host string to its first corresponding network address.
  *
- * @returns The resulting network address to which the specified host
- *          string resolved or std::nullopt if host does not resolve to an address.
- *
- * @see LookupHost(const std::string&, unsigned int, bool, DNSLookupFn)
+ * @see LookupHost(const std::string&, std::vector<CNetAddr>&, uint16_t, bool, DNSLookupFn)
  *      for additional parameter descriptions.
  */
-std::optional<CNetAddr> LookupHost(const std::string& name, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
+bool LookupHost(const std::string& name, CNetAddr& addr, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
 
 /**
  * Resolve a service string to its corresponding service.
@@ -137,6 +116,8 @@ std::optional<CNetAddr> LookupHost(const std::string& name, bool fAllowLookup, D
  *                disambiguated bracketed form), optionally followed by a uint16_t port
  *                number. (e.g. example.com:8333 or
  *                [2001:db8:85a3:8d3:1319:8a2e:370:7348]:420)
+ * @param[out] vAddr The resulting services to which the specified service string
+ *                   resolved.
  * @param portDefault The default port for resulting services if not specified
  *                    by the service string.
  * @param fAllowLookup Whether or not hostname lookups are permitted. If yes,
@@ -144,18 +125,18 @@ std::optional<CNetAddr> LookupHost(const std::string& name, bool fAllowLookup, D
  * @param nMaxSolutions The maximum number of results we want, specifying 0
  *                      means "as many solutions as we get."
  *
- * @returns The resulting services to which the specified service string
- *          resolved.
+ * @returns Whether or not the service string successfully resolved to any
+ *          resulting services.
  */
-std::vector<CService> Lookup(const std::string& name, uint16_t portDefault, bool fAllowLookup, unsigned int nMaxSolutions, DNSLookupFn dns_lookup_function = g_dns_lookup);
+bool Lookup(const std::string& name, std::vector<CService>& vAddr, uint16_t portDefault, bool fAllowLookup, unsigned int nMaxSolutions, DNSLookupFn dns_lookup_function = g_dns_lookup);
 
 /**
  * Resolve a service string to its first corresponding service.
  *
- * @see Lookup(const std::string&, uint16_t, bool, unsigned int, DNSLookupFn)
+ * @see Lookup(const std::string&, std::vector<CService>&, uint16_t, bool, unsigned int, DNSLookupFn)
  *      for additional parameter descriptions.
  */
-std::optional<CService> Lookup(const std::string& name, uint16_t portDefault, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
+bool Lookup(const std::string& name, CService& addr, uint16_t portDefault, bool fAllowLookup, DNSLookupFn dns_lookup_function = g_dns_lookup);
 
 /**
  * Resolve a service string with a numeric IP to its first corresponding
@@ -163,7 +144,7 @@ std::optional<CService> Lookup(const std::string& name, uint16_t portDefault, bo
  *
  * @returns The resulting CService if the resolution was successful, [::]:0 otherwise.
  *
- * @see Lookup(const std::string&, uint16_t, bool, unsigned int, DNSLookupFn)
+ * @see Lookup(const std::string&, std::vector<CService>&, uint16_t, bool, unsigned int, DNSLookupFn)
  *      for additional parameter descriptions.
  */
 CService LookupNumeric(const std::string& name, uint16_t portDefault = 0, DNSLookupFn dns_lookup_function = g_dns_lookup);
@@ -172,14 +153,14 @@ CService LookupNumeric(const std::string& name, uint16_t portDefault = 0, DNSLoo
  * Parse and resolve a specified subnet string into the appropriate internal
  * representation.
  *
- * @param[in]  subnet_str  A string representation of a subnet of the form
- *                         `network address [ "/", ( CIDR-style suffix | netmask ) ]`
- *                         e.g. "2001:db8::/32", "192.0.2.0/255.255.255.0" or "8.8.8.8".
- * @param[out] subnet_out  Internal subnet representation, if parsable/resolvable
- *                         from `subnet_str`.
- * @returns whether the operation succeeded or not.
+ * @param strSubnet A string representation of a subnet of the form `network
+ *                address [ "/", ( CIDR-style suffix | netmask ) ]`(e.g.
+ *                `2001:db8::/32`, `192.0.2.0/255.255.255.0`, or `8.8.8.8`).
+ * @param ret The resulting internal representation of a subnet.
+ *
+ * @returns Whether the operation succeeded or not.
  */
-bool LookupSubNet(const std::string& subnet_str, CSubNet& subnet_out);
+bool LookupSubNet(const std::string& strSubnet, CSubNet& subnet, DNSLookupFn dns_lookup_function = g_dns_lookup);
 
 /**
  * Create a TCP socket in the given address family.
@@ -222,10 +203,12 @@ bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nT
  *
  * @returns Whether or not the operation succeeded.
  */
-bool ConnectThroughProxy(const Proxy& proxy, const std::string& strDest, uint16_t port, const Sock& sock, int nTimeout, bool& outProxyConnectionFailed);
+bool ConnectThroughProxy(const proxyType& proxy, const std::string& strDest, uint16_t port, const Sock& sock, int nTimeout, bool& outProxyConnectionFailed);
 
 /** Enable non-blocking mode for a socket */
 bool SetSocketNonBlocking(const SOCKET& hSocket);
+/** Set the TCP_NODELAY flag on a socket */
+bool SetSocketNoDelay(const SOCKET& hSocket);
 void InterruptSocks5(bool interrupt);
 
 /**
@@ -236,7 +219,7 @@ void InterruptSocks5(bool interrupt);
  * @param port The destination port.
  * @param auth The credentials with which to authenticate with the specified
  *             SOCKS5 proxy.
- * @param socket The SOCKS5 proxy socket.
+ * @param sock The SOCKS5 proxy socket.
  *
  * @returns Whether or not the operation succeeded.
  *

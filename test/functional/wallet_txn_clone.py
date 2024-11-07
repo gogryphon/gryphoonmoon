@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2020 The Bitcoin Core developers
+# Copyright (c) 2014-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test the wallet accounts properly when there are cloned transactions with malleated scriptsigs."""
 
+import io
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
 )
-from test_framework.messages import (
-    COIN,
-    tx_from_hex,
-)
-
+from test_framework.messages import CTransaction, COIN
 
 class TxnMallTest(BitcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 3
+        self.num_nodes = 4
         self.supports_cli = False
 
     def skip_test_if_missing_module(self):
@@ -32,10 +29,11 @@ class TxnMallTest(BitcoinTestFramework):
         self.disconnect_nodes(1, 2)
 
     def run_test(self):
-        # All nodes should start with 12,500 DASH:
+        # All nodes should start with 12,500 GRYPM:
         starting_balance = 12500
-        for i in range(3):
+        for i in range(4):
             assert_equal(self.nodes[i].getbalance(), starting_balance)
+            self.nodes[i].getnewaddress()  # bug workaround, coins generated assigned to first getnewaddress!
 
         self.nodes[0].settxfee(.001)
 
@@ -60,13 +58,14 @@ class TxnMallTest(BitcoinTestFramework):
         # Construct a clone of tx1, to be malleated
         rawtx1 = self.nodes[0].getrawtransaction(txid1, 1)
         clone_inputs = [{"txid": rawtx1["vin"][0]["txid"], "vout": rawtx1["vin"][0]["vout"], "sequence": rawtx1["vin"][0]["sequence"]}]
-        clone_outputs = {rawtx1["vout"][0]["scriptPubKey"]["address"]: rawtx1["vout"][0]["value"],
-                         rawtx1["vout"][1]["scriptPubKey"]["address"]: rawtx1["vout"][1]["value"]}
+        clone_outputs = {rawtx1["vout"][0]["scriptPubKey"]["addresses"][0]: rawtx1["vout"][0]["value"],
+                         rawtx1["vout"][1]["scriptPubKey"]["addresses"][0]: rawtx1["vout"][1]["value"]}
         clone_locktime = rawtx1["locktime"]
         clone_raw = self.nodes[0].createrawtransaction(clone_inputs, clone_outputs, clone_locktime)
 
         # createrawtransaction randomizes the order of its outputs, so swap them if necessary.
-        clone_tx = tx_from_hex(clone_raw)
+        clone_tx = CTransaction()
+        clone_tx.deserialize(io.BytesIO(bytes.fromhex(clone_raw)))
         if (rawtx1["vout"][0]["value"] == 400 and clone_tx.vout[0].nValue != 400*COIN or rawtx1["vout"][0]["value"] != 400 and clone_tx.vout[0].nValue == 400*COIN):
             (clone_tx.vout[0], clone_tx.vout[1]) = (clone_tx.vout[1], clone_tx.vout[0])
 
@@ -77,12 +76,13 @@ class TxnMallTest(BitcoinTestFramework):
 
         # Have node0 mine a block, if requested:
         if (self.options.mine_block):
-            self.generate(self.nodes[0], 1, sync_fun=lambda: self.sync_blocks(self.nodes[0:2]))
+            self.nodes[0].generate(1)
+            self.sync_blocks(self.nodes[0:2])
 
         tx1 = self.nodes[0].gettransaction(txid1)
         tx2 = self.nodes[0].gettransaction(txid2)
 
-        # Node0's balance should be starting balance, plus 500DASH for another
+        # Node0's balance should be starting balance, plus 500 GRYPM for another
         # matured block, minus tx1 and tx2 amounts, and minus transaction fees:
         expected = starting_balance + node0_tx1["fee"] + node0_tx2["fee"]
         if self.options.mine_block:
@@ -102,13 +102,13 @@ class TxnMallTest(BitcoinTestFramework):
         self.nodes[2].sendrawtransaction(node0_tx1["hex"])
         txid1_clone = self.nodes[2].sendrawtransaction(tx1_clone["hex"])
         # ... mine a block...
-        self.generate(self.nodes[2], 1, sync_fun=self.no_op)
+        self.nodes[2].generate(1)
 
         # Reconnect the split network, and sync chain:
         self.connect_nodes(1, 2)
         self.nodes[2].sendrawtransaction(node0_tx2["hex"])
         self.nodes[2].sendrawtransaction(tx2["hex"])
-        self.generate(self.nodes[2], 1)  # Mine another block to make sure we sync
+        self.nodes[2].generate(1)  # Mine another block to make sure we sync
         self.sync_blocks()
 
         # Re-fetch transaction info:
@@ -121,13 +121,12 @@ class TxnMallTest(BitcoinTestFramework):
         assert_equal(tx1_clone["confirmations"], 2)
         assert_equal(tx2["confirmations"], 1)
 
-        # Check node0's total balance; should be same as before the clone, + 1000 DASH for 2 matured,
+        # Check node0's total balance; should be same as before the clone, + 1000 GRYPM for 2 matured,
         # less possible orphaned matured subsidy
         expected += 1000
         if (self.options.mine_block):
             expected -= 500
         assert_equal(self.nodes[0].getbalance(), expected)
-
 
 if __name__ == '__main__':
     TxnMallTest().main()

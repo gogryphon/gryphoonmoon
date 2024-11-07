@@ -32,7 +32,7 @@ SendCoinsEntry::SendCoinsEntry(QWidget* parent) :
 
     setButtonIcons();
 
-    // normal dash address field
+    // normal gryphonmoon address field
     GUIUtil::setupAddressWidget(ui->payTo, this, true);
 
     GUIUtil::setFont({ui->payToLabel,
@@ -103,9 +103,7 @@ void SendCoinsEntry::clear()
     ui->payTo->clear();
     ui->addAsLabel->clear();
     ui->payAmount->clear();
-    if (model && model->getOptionsModel()) {
-        ui->checkboxSubtractFeeFromAmount->setChecked(model->getOptionsModel()->getSubFeeFromAmount());
-    }
+    ui->checkboxSubtractFeeFromAmount->setCheckState(Qt::Unchecked);
     ui->messageTextLabel->clear();
     ui->messageTextLabel->hide();
     ui->messageLabel->hide();

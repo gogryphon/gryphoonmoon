@@ -1,10 +1,8 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2023 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chainparams.h>
-#include <evo/assetlocktx.h>
-#include <evo/chainhelper.h>
 #include <evo/deterministicmns.h>
 #include <governance/classes.h>
 #include <index/txindex.h>
@@ -17,11 +15,10 @@
 #include <netbase.h>
 #include <rpc/blockchain.h>
 #include <rpc/server.h>
-#include <rpc/server_util.h>
 #include <rpc/util.h>
 #include <univalue.h>
-#include <util/check.h>
 #include <util/strencodings.h>
+#include <spork.h>
 #include <validation.h>
 #include <wallet/coincontrol.h>
 #include <wallet/rpcwallet.h>
@@ -32,53 +29,83 @@
 #include <fstream>
 #include <iomanip>
 
-static RPCHelpMan masternode_connect()
+static UniValue masternodelist(const JSONRPCRequest& request, ChainstateManager& chainman);
+
+static void masternode_list_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode connect",
-        "Connect to given masternode\n",
+    RPCHelpMan{"masternodelist",
+        "Get a list of masternodes in different modes. This call is identical to 'masternode list' call.\n"
+        "Available modes:\n"
+        "  addr           - Print ip address associated with a masternode (can be additionally filtered, partial match)\n"
+        "  recent         - Print info in JSON format for active and recently banned masternodes (can be additionally filtered, partial match)\n"
+        "  evo            - Print info in JSON format for EvoNodes only\n"
+        "  full           - Print info in format 'status payee lastpaidtime lastpaidblock IP'\n"
+        "                   (can be additionally filtered, partial match)\n"
+        "  info           - Print info in format 'status payee IP'\n"
+        "                   (can be additionally filtered, partial match)\n"
+        "  json           - Print info in JSON format (can be additionally filtered, partial match)\n"
+        "  lastpaidblock  - Print the last block height a node was paid on the network\n"
+        "  lastpaidtime   - Print the last time a node was paid on the network\n"
+        "  owneraddress   - Print the masternode owner Gryphonmoon address\n"
+        "  payee          - Print the masternode payout Gryphonmoon address (can be additionally filtered,\n"
+        "                   partial match)\n"
+        "  pubKeyOperator - Print the masternode operator public key\n"
+        "  status         - Print masternode status: ENABLED / POSE_BANNED\n"
+        "                   (can be additionally filtered, partial match)\n"
+        "  votingaddress  - Print the masternode voting Gryphonmoon address\n",
         {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The address of the masternode to connect"},
-            {"v2transport", RPCArg::Type::BOOL, RPCArg::Default{false}, "Attempt to connect using BIP324 v2 transport protocol"},
+            {"mode", RPCArg::Type::STR, /* default */ "json", "The mode to run list in"},
+            {"filter", RPCArg::Type::STR, /* default */ "", "Filter results. Partial match by outpoint by default in all modes, additional matches in some modes are also available"},
         },
         RPCResults{},
         RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    std::string strAddress = request.params[0].get_str();
-
-    std::optional<CService> addr{Lookup(strAddress, 0, false)};
-    if (!addr.has_value()) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Incorrect masternode address %s", strAddress));
-    }
-
-    bool use_v2transport = !request.params[1].isNull() && ParseBoolV(request.params[1], "v2transport");
-
-    const NodeContext& node = EnsureAnyNodeContext(request.context);
-    CConnman& connman = EnsureConnman(node);
-
-    if (use_v2transport && !(connman.GetLocalServices() & NODE_P2P_V2)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Error: Adding v2transport connections requires -v2transport init flag to be set.");
-    }
-
-    connman.OpenMasternodeConnection(CAddress(addr.value(), NODE_NETWORK), use_v2transport);
-    if (!connman.IsConnected(CAddress(addr.value(), NODE_NETWORK), CConnman::AllNodes)) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Couldn't connect to masternode %s", strAddress));
-    }
-
-    return "successfully connected";
-},
-    };
+    }.Check(request);
 }
 
-static RPCHelpMan masternode_count()
+static void masternode_connect_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode count",
+    RPCHelpMan{"masternode connect",
+        "Connect to given masternode\n",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The address of the masternode to connect"},
+        },
+        RPCResults{},
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_connect(const JSONRPCRequest& request)
+{
+    masternode_connect_help(request);
+
+    std::string strAddress = request.params[0].get_str();
+
+    CService addr;
+    if (!Lookup(strAddress, addr, 0, false))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Incorrect masternode address %s", strAddress));
+
+    const NodeContext& node = EnsureAnyNodeContext(request.context);
+    node.connman->OpenMasternodeConnection(CAddress(addr, NODE_NETWORK));
+    if (!node.connman->IsConnected(CAddress(addr, NODE_NETWORK), CConnman::AllNodes))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Couldn't connect to masternode %s", strAddress));
+
+    return "successfully connected";
+}
+
+static void masternode_count_help(const JSONRPCRequest& request)
+{
+    RPCHelpMan{"masternode count",
         "Get information about number of masternodes.\n",
         {},
         RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_count(const JSONRPCRequest& request)
 {
+    masternode_count_help(request);
+
     const NodeContext& node = EnsureAnyNodeContext(request.context);
 
     auto mnList = node.dmnman->GetListAtChainTip();
@@ -89,30 +116,29 @@ static RPCHelpMan masternode_count()
     obj.pushKV("total", total);
     obj.pushKV("enabled", enabled);
 
-    int evo_total = mnList.GetAllEvoCount();
-    int evo_enabled = mnList.GetValidEvoCount();
+    // Disable Evonodes
+    // int evo_total = mnList.GetAllEvoCount();
+    // int evo_enabled = mnList.GetValidEvoCount();
 
-    UniValue evoObj(UniValue::VOBJ);
-    evoObj.pushKV("total", evo_total);
-    evoObj.pushKV("enabled", evo_enabled);
+    // UniValue evoObj(UniValue::VOBJ);
+    // evoObj.pushKV("total", evo_total);
+    // evoObj.pushKV("enabled", evo_enabled);
 
-    UniValue regularObj(UniValue::VOBJ);
-    regularObj.pushKV("total", total - evo_total);
-    regularObj.pushKV("enabled", enabled - evo_enabled);
+    // UniValue regularObj(UniValue::VOBJ);
+    // regularObj.pushKV("total", total - evo_total);
+    // regularObj.pushKV("enabled", enabled - evo_enabled);
 
-    UniValue detailedObj(UniValue::VOBJ);
-    detailedObj.pushKV("regular", regularObj);
-    detailedObj.pushKV("evo", evoObj);
-    obj.pushKV("detailed", detailedObj);
+    // UniValue detailedObj(UniValue::VOBJ);
+    // detailedObj.pushKV("regular", regularObj);
+    // detailedObj.pushKV("evo", evoObj);
+    // obj.pushKV("detailed", detailedObj);
 
     return obj;
-},
-    };
 }
 
-static UniValue GetNextMasternodeForPayment(const CChain& active_chain, CDeterministicMNManager& dmnman, int heightShift)
+static UniValue GetNextMasternodeForPayment(CDeterministicMNManager& dmnman, int heightShift)
 {
-    const CBlockIndex *tip = WITH_LOCK(::cs_main, return active_chain.Tip());
+    const CBlockIndex *tip = WITH_LOCK(::cs_main, return ::ChainActive().Tip());
     auto mnList = dmnman.GetListForBlock(tip);
     auto payees = mnList.GetProjectedMNPayees(tip, heightShift);
     if (payees.empty())
@@ -126,57 +152,61 @@ static UniValue GetNextMasternodeForPayment(const CChain& active_chain, CDetermi
     UniValue obj(UniValue::VOBJ);
 
     obj.pushKV("height",        mnList.GetHeight() + heightShift);
-    obj.pushKV("IP:port",       payee->pdmnState->addr.ToStringAddrPort());
+    obj.pushKV("IP:port",       payee->pdmnState->addr.ToString());
     obj.pushKV("proTxHash",     payee->proTxHash.ToString());
     obj.pushKV("outpoint",      payee->collateralOutpoint.ToStringShort());
     obj.pushKV("payee",         IsValidDestination(payeeDest) ? EncodeDestination(payeeDest) : "UNKNOWN");
     return obj;
 }
 
-static RPCHelpMan masternode_winner()
-{
-    return RPCHelpMan{"masternode winner",
-        "Print info on next masternode winner to vote for\n",
-        {},
-        RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+static void masternode_winner_help(const JSONRPCRequest& request)
 {
     if (!IsDeprecatedRPCEnabled("masternode_winner")) {
         throw std::runtime_error("DEPRECATED: set -deprecatedrpc=masternode_winner to enable it");
     }
 
-    const NodeContext& node = EnsureAnyNodeContext(request.context);
-    const ChainstateManager& chainman = EnsureChainman(node);
-    return GetNextMasternodeForPayment(chainman.ActiveChain(), *CHECK_NONFATAL(node.dmnman), 10);
-},
-    };
-}
-
-static RPCHelpMan masternode_current()
-{
-    return RPCHelpMan{"masternode current",
-        "Print info on current masternode winner to be paid the next block (calculated locally)\n",
+    RPCHelpMan{"masternode winner",
+        "Print info on next masternode winner to vote for\n",
         {},
         RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_winner(const JSONRPCRequest& request)
+{
+    masternode_winner_help(request);
+
+    const NodeContext& node = EnsureAnyNodeContext(request.context);
+    return GetNextMasternodeForPayment(*node.dmnman, 10);
+}
+
+static void masternode_current_help(const JSONRPCRequest& request)
 {
     if (!IsDeprecatedRPCEnabled("masternode_current")) {
         throw std::runtime_error("DEPRECATED: set -deprecatedrpc=masternode_current to enable it");
     }
 
+    RPCHelpMan{"masternode current",
+        "Print info on current masternode winner to be paid the next block (calculated locally)\n",
+        {},
+        RPCResults{},
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_current(const JSONRPCRequest& request)
+{
+    masternode_current_help(request);
+
     const NodeContext& node = EnsureAnyNodeContext(request.context);
-    const ChainstateManager& chainman = EnsureChainman(node);
-    return GetNextMasternodeForPayment(chainman.ActiveChain(), *CHECK_NONFATAL(node.dmnman), 1);
-},
-    };
+    return GetNextMasternodeForPayment(*node.dmnman, 1);
 }
 
 #ifdef ENABLE_WALLET
-static RPCHelpMan masternode_outputs()
+static void masternode_outputs_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode outputs",
+    RPCHelpMan{"masternode outputs",
         "Print masternode compatible outputs\n",
         {},
         RPCResult {
@@ -184,9 +214,14 @@ static RPCHelpMan masternode_outputs()
             {
                 {RPCResult::Type::STR, "", "A (potential) masternode collateral"},
             }},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_outputs(const JSONRPCRequest& request)
 {
+    masternode_outputs_help(request);
+
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
     if (!wallet) return NullUniValue;
 
@@ -196,7 +231,7 @@ static RPCHelpMan masternode_outputs()
     coin_control.nCoinType = CoinType::ONLY_MASTERNODE_COLLATERAL;
     {
         LOCK(wallet->cs_wallet);
-        wallet->AvailableCoins(vPossibleCoins, &coin_control);
+        wallet->AvailableCoins(vPossibleCoins, true, &coin_control);
     }
     UniValue outputsArr(UniValue::VARR);
     for (const auto& out : vPossibleCoins) {
@@ -204,66 +239,72 @@ static RPCHelpMan masternode_outputs()
     }
 
     return outputsArr;
-},
-    };
 }
 
 #endif // ENABLE_WALLET
 
-static RPCHelpMan masternode_status()
+static void masternode_status_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode status",
+    RPCHelpMan{"masternode status",
         "Print masternode status information\n",
         {},
         RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_status(const JSONRPCRequest& request)
 {
+    masternode_status_help(request);
+
+    if (!fMasternodeMode)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "This is not a masternode");
+
     const NodeContext& node = EnsureAnyNodeContext(request.context);
 
-    if (!node.mn_activeman) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "This node does not run an active masternode.");
-    }
-
     UniValue mnObj(UniValue::VOBJ);
-    // keep compatibility with legacy status for now (might get deprecated/removed later)
-    mnObj.pushKV("outpoint", node.mn_activeman->GetOutPoint().ToStringShort());
-    mnObj.pushKV("service", node.mn_activeman->GetService().ToStringAddrPort());
-    CDeterministicMNCPtr dmn = CHECK_NONFATAL(node.dmnman)->GetListAtChainTip().GetMN(node.mn_activeman->GetProTxHash());
+    CDeterministicMNCPtr dmn;
+    {
+        LOCK(activeMasternodeInfoCs);
+
+        // keep compatibility with legacy status for now (might get deprecated/removed later)
+        mnObj.pushKV("outpoint", activeMasternodeInfo.outpoint.ToStringShort());
+        mnObj.pushKV("service", activeMasternodeInfo.service.ToString());
+        dmn = node.dmnman->GetListAtChainTip().GetMN(activeMasternodeInfo.proTxHash);
+    }
     if (dmn) {
         mnObj.pushKV("proTxHash", dmn->proTxHash.ToString());
-        mnObj.pushKV("type", std::string(GetMnType(dmn->nType).description));
+        // Disable Evonodes
+        // mnObj.pushKV("type", std::string(GetMnType(dmn->nType).description));
         mnObj.pushKV("collateralHash", dmn->collateralOutpoint.hash.ToString());
         mnObj.pushKV("collateralIndex", (int)dmn->collateralOutpoint.n);
         mnObj.pushKV("dmnState", dmn->pdmnState->ToJson(dmn->nType));
     }
-    mnObj.pushKV("state", node.mn_activeman->GetStateString());
-    mnObj.pushKV("status", node.mn_activeman->GetStatus());
+    mnObj.pushKV("state", activeMasternodeManager->GetStateString());
+    mnObj.pushKV("status", activeMasternodeManager->GetStatus());
 
     return mnObj;
-},
-    };
 }
 
-static std::string GetRequiredPaymentsString(CGovernanceManager& govman, const CDeterministicMNList& tip_mn_list, int nBlockHeight, const CDeterministicMNCPtr &payee)
+static std::string GetRequiredPaymentsString(CGovernanceManager& govman, int nBlockHeight, const CDeterministicMNCPtr &payee)
 {
     std::string strPayments = "Unknown";
     if (payee) {
         CTxDestination dest;
         if (!ExtractDestination(payee->pdmnState->scriptPayout, dest)) {
-            NONFATAL_UNREACHABLE();
+            CHECK_NONFATAL(false);
         }
         strPayments = EncodeDestination(dest);
         if (payee->nOperatorReward != 0 && payee->pdmnState->scriptOperatorPayout != CScript()) {
             if (!ExtractDestination(payee->pdmnState->scriptOperatorPayout, dest)) {
-                NONFATAL_UNREACHABLE();
+                CHECK_NONFATAL(false);
             }
             strPayments += ", " + EncodeDestination(dest);
         }
     }
-    if (govman.IsSuperblockTriggered(tip_mn_list, nBlockHeight)) {
+    if (CSuperblockManager::IsSuperblockTriggered(govman, nBlockHeight)) {
         std::vector<CTxOut> voutSuperblock;
-        if (!govman.GetSuperblockPayments(tip_mn_list, nBlockHeight, voutSuperblock)) {
+        if (!CSuperblockManager::GetSuperblockPayments(govman, nBlockHeight, voutSuperblock)) {
             return strPayments + ", error";
         }
         std::string strSBPayees = "Unknown";
@@ -281,20 +322,23 @@ static std::string GetRequiredPaymentsString(CGovernanceManager& govman, const C
     return strPayments;
 }
 
-static RPCHelpMan masternode_winners()
+static void masternode_winners_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode winners",
+    RPCHelpMan{"masternode winners",
         "Print list of masternode winners\n",
         {
-            {"count", RPCArg::Type::NUM, RPCArg::Default{10}, "number of last winners to return"},
-            {"filter", RPCArg::Type::STR, RPCArg::Default{""}, "filter for returned winners"},
+            {"count", RPCArg::Type::NUM, /* default */ "", "number of last winners to return"},
+            {"filter", RPCArg::Type::STR, /* default */ "", "filter for returned winners"},
         },
         RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        RPCExamples{""}
+    }.Check(request);
+}
+
+static UniValue masternode_winners(const JSONRPCRequest& request, const ChainstateManager& chainman)
 {
-    const NodeContext& node = EnsureAnyNodeContext(request.context);
-    const ChainstateManager& chainman = EnsureChainman(node);
+    masternode_winners_help(request);
+
     const CBlockIndex* pindexTip{nullptr};
     {
         LOCK(cs_main);
@@ -318,11 +362,11 @@ static RPCHelpMan masternode_winners()
     int nChainTipHeight = pindexTip->nHeight;
     int nStartHeight = std::max(nChainTipHeight - nCount, 1);
 
-    const auto tip_mn_list = CHECK_NONFATAL(node.dmnman)->GetListAtChainTip();
+    const NodeContext& node = EnsureAnyNodeContext(request.context);
     for (int h = nStartHeight; h <= nChainTipHeight; h++) {
         const CBlockIndex* pIndex = pindexTip->GetAncestor(h - 1);
         auto payee = node.dmnman->GetListForBlock(pIndex).GetMNPayee(pIndex);
-        std::string strPayments = GetRequiredPaymentsString(*CHECK_NONFATAL(node.govman), tip_mn_list, h, payee);
+        std::string strPayments = GetRequiredPaymentsString(*node.govman, h, payee);
         if (strFilter != "" && strPayments.find(strFilter) == std::string::npos) continue;
         obj.pushKV(strprintf("%d", h), strPayments);
     }
@@ -330,23 +374,21 @@ static RPCHelpMan masternode_winners()
     auto projection = node.dmnman->GetListForBlock(pindexTip).GetProjectedMNPayees(pindexTip, 20);
     for (size_t i = 0; i < projection.size(); i++) {
         int h = nChainTipHeight + 1 + i;
-        std::string strPayments = GetRequiredPaymentsString(*node.govman, tip_mn_list, h, projection[i]);
+        std::string strPayments = GetRequiredPaymentsString(*node.govman, h, projection[i]);
         if (strFilter != "" && strPayments.find(strFilter) == std::string::npos) continue;
         obj.pushKV(strprintf("%d", h), strPayments);
     }
 
     return obj;
-},
-    };
 }
 
-static RPCHelpMan masternode_payments()
+static void masternode_payments_help(const JSONRPCRequest& request)
 {
-    return RPCHelpMan{"masternode payments",
+    RPCHelpMan{"masternode payments",
         "\nReturns an array of deterministic masternodes and their payments for the specified block\n",
         {
-            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::DefaultHint{"tip"}, "The hash of the starting block"},
-            {"count", RPCArg::Type::NUM, RPCArg::Default{1}, "The number of blocks to return. Will return <count> previous blocks if <count> is negative. Both 1 and -1 correspond to the chain tip."},
+            {"blockhash", RPCArg::Type::STR_HEX, /* default */ "tip", "The hash of the starting block"},
+            {"count", RPCArg::Type::NUM, /* default */ "1", "The number of blocks to return. Will return <count> previous blocks if <count> is negative. Both 1 and -1 correspond to the chain tip."},
         },
         RPCResult {
             RPCResult::Type::ARR, "", "Blocks",
@@ -370,13 +412,15 @@ static RPCHelpMan masternode_payments()
                 }},
             },
         },
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    const NodeContext& node = EnsureAnyNodeContext(request.context);
-    const ChainstateManager& chainman = EnsureChainman(node);
+        RPCExamples{""}
+    }.Check(request);
+}
 
-    const CBlockIndex* pindex{nullptr};
+static UniValue masternode_payments(const JSONRPCRequest& request, const ChainstateManager& chainman)
+{
+    masternode_payments_help(request);
+
+    CBlockIndex* pindex{nullptr};
 
     if (g_txindex) {
         g_txindex->BlockUntilSyncedToCurrentChain();
@@ -399,8 +443,7 @@ static RPCHelpMan masternode_payments()
     // A temporary vector which is used to sort results properly (there is no "reverse" in/for UniValue)
     std::vector<UniValue> vecPayments;
 
-    CHECK_NONFATAL(node.chain_helper);
-    CHECK_NONFATAL(node.dmnman);
+    const NodeContext& node = EnsureAnyNodeContext(request.context);
     while (vecPayments.size() < uint64_t(std::abs(nCount)) && pindex != nullptr) {
         CBlock block;
         if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
@@ -415,13 +458,6 @@ static RPCHelpMan masternode_payments()
             if (tx->IsCoinBase()) {
                 continue;
             }
-            if (tx->IsPlatformTransfer()) {
-                auto payload = GetTxPayload<CAssetUnlockPayload>(*tx);
-                CHECK_NONFATAL(payload);
-                nBlockFees += payload->getFee();
-                continue;
-            }
-
             CAmount nValueIn{0};
             for (const auto& txin : tx->vin) {
                 uint256 blockHashTmp;
@@ -434,7 +470,7 @@ static RPCHelpMan masternode_payments()
         std::vector<CTxOut> voutMasternodePayments, voutDummy;
         CMutableTransaction dummyTx;
         CAmount blockSubsidy = GetBlockSubsidy(pindex, Params().GetConsensus());
-        node.chain_helper->mn_payments->FillBlockPayments(dummyTx, pindex->pprev, blockSubsidy, nBlockFees, voutMasternodePayments, voutDummy);
+        MasternodePayments::FillBlockPayments(*node.sporkman, *node.govman, dummyTx, pindex->pprev, blockSubsidy, nBlockFees, voutMasternodePayments, voutDummy);
 
         UniValue blockObj(UniValue::VOBJ);
         CAmount payedPerBlock{0};
@@ -487,13 +523,11 @@ static RPCHelpMan masternode_payments()
     }
 
     return paymentsArr;
-},
-    };
 }
 
-static RPCHelpMan masternode_help()
+[[ noreturn ]] static void masternode_help()
 {
-    return RPCHelpMan{"masternode",
+    RPCHelpMan{"masternode",
         "Set of commands to execute masternode related actions\n"
         "\nAvailable commands:\n"
         "  count        - Get information about number of masternodes\n"
@@ -511,44 +545,42 @@ static RPCHelpMan masternode_help()
         },
         RPCResults{},
         RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    throw JSONRPCError(RPC_INVALID_PARAMETER, "Must be a valid command");
-},
-    };
+    }.Throw();
 }
 
-static RPCHelpMan masternodelist_helper(bool is_composite)
+static UniValue masternode(const JSONRPCRequest& request)
 {
-    // We need both composite and non-composite options because we support
-    // both options 'masternodelist' and 'masternode list'
-    return RPCHelpMan{is_composite ? "masternode list" : "masternodelist",
-        "Get a list of masternodes in different modes. This call is identical to 'masternode list' call.\n"
-        "Available modes:\n"
-        "  addr           - Print ip address associated with a masternode (can be additionally filtered, partial match)\n"
-        "  recent         - Print info in JSON format for active and recently banned masternodes (can be additionally filtered, partial match)\n"
-        "  evo            - Print info in JSON format for EvoNodes only\n"
-        "  full           - Print info in format 'status payee lastpaidtime lastpaidblock IP'\n"
-        "                   (can be additionally filtered, partial match)\n"
-        "  info           - Print info in format 'status payee IP'\n"
-        "                   (can be additionally filtered, partial match)\n"
-        "  json           - Print info in JSON format (can be additionally filtered, partial match)\n"
-        "  lastpaidblock  - Print the last block height a node was paid on the network\n"
-        "  lastpaidtime   - Print the last time a node was paid on the network\n"
-        "  owneraddress   - Print the masternode owner Dash address\n"
-        "  payee          - Print the masternode payout Dash address (can be additionally filtered,\n"
-        "                   partial match)\n"
-        "  pubKeyOperator - Print the masternode operator public key\n"
-        "  status         - Print masternode status: ENABLED / POSE_BANNED\n"
-        "                   (can be additionally filtered, partial match)\n"
-        "  votingaddress  - Print the masternode voting Dash address\n",
-        {
-            {"mode", RPCArg::Type::STR, RPCArg::DefaultHint{"json"}, "The mode to run list in"},
-            {"filter", RPCArg::Type::STR, RPCArg::Default{""}, "Filter results. Partial match by outpoint by default in all modes, additional matches in some modes are also available"},
-        },
-        RPCResults{},
-        RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+    const JSONRPCRequest new_request{request.strMethod == "masternode" ? request.squashed() : request};
+    const std::string command{new_request.strMethod};
+
+    ChainstateManager& chainman = EnsureAnyChainman(request.context);
+
+    if (command == "masternodeconnect") {
+        return masternode_connect(new_request);
+    } else if (command == "masternodecount") {
+        return masternode_count(new_request);
+    } else if (command == "masternodecurrent") {
+        return masternode_current(new_request);
+    } else if (command == "masternodewinner") {
+        return masternode_winner(new_request);
+#ifdef ENABLE_WALLET
+    } else if (command == "masternodeoutputs") {
+        return masternode_outputs(new_request);
+#endif // ENABLE_WALLET
+    } else if (command == "masternodestatus") {
+        return masternode_status(new_request);
+    } else if (command == "masternodepayments") {
+        return masternode_payments(new_request, chainman);
+    } else if (command == "masternodewinners") {
+        return masternode_winners(new_request, chainman);
+    } else if (command == "masternodelist") {
+        return masternodelist(new_request, chainman);
+    } else {
+        masternode_help();
+    }
+}
+
+static UniValue masternodelist(const JSONRPCRequest& request, ChainstateManager& chainman)
 {
     std::string strMode = "json";
     std::string strFilter = "";
@@ -558,23 +590,22 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
 
     strMode = ToLower(strMode);
 
-    if (
+    if (request.fHelp || (
                 strMode != "addr" && strMode != "full" && strMode != "info" && strMode != "json" &&
                 strMode != "owneraddress" && strMode != "votingaddress" &&
                 strMode != "lastpaidtime" && strMode != "lastpaidblock" &&
                 strMode != "payee" && strMode != "pubkeyoperator" &&
-                strMode != "status" && strMode != "recent" && strMode != "evo")
+                strMode != "status" && strMode != "recent" && strMode != "evo"))
     {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("strMode %s not found", strMode));
+        masternode_list_help(request);
     }
 
     const NodeContext& node = EnsureAnyNodeContext(request.context);
-    const ChainstateManager& chainman = EnsureChainman(node);
 
     UniValue obj(UniValue::VOBJ);
 
-    const auto mnList = CHECK_NONFATAL(node.dmnman)->GetListAtChainTip();
-    const auto dmnToStatus = [&](const auto& dmn) {
+    auto mnList = node.dmnman->GetListAtChainTip();
+    auto dmnToStatus = [&](auto& dmn) {
         if (mnList.IsMNValid(dmn)) {
             return "ENABLED";
         }
@@ -583,7 +614,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
         }
         return "UNKNOWN";
     };
-    const auto dmnToLastPaidTime = [&](const auto& dmn) {
+    auto dmnToLastPaidTime = [&](auto& dmn) {
         if (dmn.pdmnState->nLastPaidHeight == 0) {
             return (int)0;
         }
@@ -593,9 +624,9 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
         return (int)pindex->nTime;
     };
 
-    const bool showRecentMnsOnly = strMode == "recent";
-    const bool showEvoOnly = strMode == "evo";
-    const int tipHeight = WITH_LOCK(cs_main, return chainman.ActiveChain().Tip()->nHeight);
+    bool showRecentMnsOnly = strMode == "recent";
+    bool showEvoOnly = strMode == "evo";
+    int tipHeight = WITH_LOCK(cs_main, return chainman.ActiveChain().Tip()->nHeight);
     mnList.ForEachMN(false, [&](auto& dmn) {
         if (showRecentMnsOnly && mnList.IsMNPoSeBanned(dmn)) {
             if (tipHeight - dmn.pdmnState->GetBannedHeight() > Params().GetConsensus().nSuperblockCycle) {
@@ -609,7 +640,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
         std::string strOutpoint = dmn.collateralOutpoint.ToStringShort();
         Coin coin;
         std::string collateralAddressStr = "UNKNOWN";
-        if (GetUTXOCoin(chainman.ActiveChainstate(), dmn.collateralOutpoint, coin)) {
+        if (GetUTXOCoin(dmn.collateralOutpoint, coin)) {
             CTxDestination collateralDest;
             if (ExtractDestination(coin.out.scriptPubKey, collateralDest)) {
                 collateralAddressStr = EncodeDestination(collateralDest);
@@ -624,7 +655,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
         }
 
         if (strMode == "addr") {
-            std::string strAddress = dmn.pdmnState->addr.ToStringAddrPort();
+            std::string strAddress = dmn.pdmnState->addr.ToString(false);
             if (strFilter !="" && strAddress.find(strFilter) == std::string::npos &&
                 strOutpoint.find(strFilter) == std::string::npos) return;
             obj.pushKV(strOutpoint, strAddress);
@@ -636,7 +667,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
                            payeeStr << " " << std::setw(10) <<
                            dmnToLastPaidTime(dmn) << " "  << std::setw(6) <<
                            dmn.pdmnState->nLastPaidHeight << " " <<
-                           dmn.pdmnState->addr.ToStringAddrPort();
+                           dmn.pdmnState->addr.ToString();
             std::string strFull = streamFull.str();
             if (strFilter !="" && strFull.find(strFilter) == std::string::npos &&
                 strOutpoint.find(strFilter) == std::string::npos) return;
@@ -647,7 +678,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
                            dmnToStatus(dmn) << " " <<
                            dmn.pdmnState->nPoSePenalty << " " <<
                            payeeStr << " " <<
-                           dmn.pdmnState->addr.ToStringAddrPort();
+                           dmn.pdmnState->addr.ToString();
             std::string strInfo = streamInfo.str();
             if (strFilter !="" && strInfo.find(strFilter) == std::string::npos &&
                 strOutpoint.find(strFilter) == std::string::npos) return;
@@ -655,7 +686,7 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
         } else if (strMode == "json" || strMode == "recent" || strMode == "evo") {
             std::ostringstream streamInfo;
             streamInfo <<  dmn.proTxHash.ToString() << " " <<
-                           dmn.pdmnState->addr.ToStringAddrPort() << " " <<
+                           dmn.pdmnState->addr.ToString() << " " <<
                            payeeStr << " " <<
                            dmnToStatus(dmn) << " " <<
                            dmn.pdmnState->nPoSePenalty << " " <<
@@ -670,15 +701,16 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
                 strOutpoint.find(strFilter) == std::string::npos) return;
             UniValue objMN(UniValue::VOBJ);
             objMN.pushKV("proTxHash", dmn.proTxHash.ToString());
-            objMN.pushKV("address", dmn.pdmnState->addr.ToStringAddrPort());
+            objMN.pushKV("address", dmn.pdmnState->addr.ToString());
             objMN.pushKV("payee", payeeStr);
             objMN.pushKV("status", dmnToStatus(dmn));
-            objMN.pushKV("type", std::string(GetMnType(dmn.nType).description));
-            if (dmn.nType == MnType::Evo) {
-                objMN.pushKV("platformNodeID", dmn.pdmnState->platformNodeID.ToString());
-                objMN.pushKV("platformP2PPort", dmn.pdmnState->platformP2PPort);
-                objMN.pushKV("platformHTTPPort", dmn.pdmnState->platformHTTPPort);
-            }
+            // Disable Evonodes
+            // objMN.pushKV("type", std::string(GetMnType(dmn.nType).description));
+            // if (dmn.nType == MnType::Evo) {
+            //     objMN.pushKV("platformNodeID", dmn.pdmnState->platformNodeID.ToString());
+            //     objMN.pushKV("platformP2PPort", dmn.pdmnState->platformP2PPort);
+            //     objMN.pushKV("platformHTTPPort", dmn.pdmnState->platformHTTPPort);
+            // }
             objMN.pushKV("pospenaltyscore", dmn.pdmnState->nPoSePenalty);
             objMN.pushKV("consecutivePayments", dmn.pdmnState->nConsecutivePayments);
             objMN.pushKV("lastpaidtime", dmnToLastPaidTime(dmn));
@@ -716,39 +748,16 @@ static RPCHelpMan masternodelist_helper(bool is_composite)
     });
 
     return obj;
-},
-    };
-}
-
-static RPCHelpMan masternodelist()
-{
-    return masternodelist_helper(false);
-}
-
-static RPCHelpMan masternodelist_composite()
-{
-    return masternodelist_helper(true);
 }
 
 void RegisterMasternodeRPCCommands(CRPCTable &t)
 {
 // clang-format off
 static const CRPCCommand commands[] =
-{ //  category              actor (function)
-  //  --------------------- -----------------------
-    { "dash",               &masternode_help,          },
-    { "dash",               &masternodelist_composite, },
-    { "dash",               &masternodelist,           },
-    { "dash",               &masternode_connect,       },
-    { "dash",               &masternode_count,         },
-#ifdef ENABLE_WALLET
-    { "dash",               &masternode_outputs,       },
-#endif // ENABLE_WALLET
-    { "dash",               &masternode_status,        },
-    { "dash",               &masternode_payments,      },
-    { "dash",               &masternode_winners,       },
-    { "dash",               &masternode_current,       },
-    { "dash",               &masternode_winner,        },
+{ //  category              name                      actor (function)         argNames
+  //  --------------------- ------------------------  -----------------------  ----------
+    { "gryphonmoon",               "masternode",             &masternode,             {} },
+    { "gryphonmoon",               "masternodelist",         &masternode,             {} },
 };
 // clang-format on
     for (const auto& command : commands) {

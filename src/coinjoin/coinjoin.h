@@ -22,16 +22,13 @@
 #include <optional>
 #include <utility>
 
-class CActiveMasternodeManager;
 class CChainState;
 class CConnman;
 class CBLSPublicKey;
 class CBlockIndex;
-class ChainstateManager;
 class CMasternodeSync;
 class CTxMemPool;
 class TxValidationState;
-class PeerManager;
 
 namespace llmq {
 class CChainLocksHandler;
@@ -154,7 +151,7 @@ public:
     CService addr;
 
     CCoinJoinEntry() :
-        txCollateral(MakeTransactionRef(CMutableTransaction{}))
+        txCollateral(MakeTransactionRef())
     {
     }
 
@@ -208,7 +205,6 @@ public:
         }
     }
 
-    [[nodiscard]] uint256 GetHash() const;
     [[nodiscard]] uint256 GetSignatureHash() const;
     /** Sign this mixing transaction
      *  return true if all conditions are met:
@@ -217,11 +213,11 @@ public:
      *     3) we signed the message successfully, and
      *     4) we verified the message successfully
      */
-    bool Sign(const CActiveMasternodeManager& mn_activeman);
+    bool Sign();
     /// Check if we have a valid Masternode address
     [[nodiscard]] bool CheckSignature(const CBLSPublicKey& blsPubKey) const;
 
-    bool Relay(CConnman& connman, PeerManager& peerman);
+    bool Relay(CConnman& connman);
 
     /// Check if a queue is too old or too far into the future
     [[nodiscard]] bool IsTimeOutOfBounds(int64_t current_time = GetAdjustedTime()) const;
@@ -249,8 +245,9 @@ public:
     uint256 m_protxHash;
     std::vector<unsigned char> vchSig;
     int64_t sigTime{0};
+
     CCoinJoinBroadcastTx() :
-        tx(MakeTransactionRef(CMutableTransaction{}))
+        tx(MakeTransactionRef())
     {
     }
 
@@ -287,7 +284,7 @@ public:
 
     [[nodiscard]] uint256 GetSignatureHash() const;
 
-    bool Sign(const CActiveMasternodeManager& mn_activeman);
+    bool Sign();
     [[nodiscard]] bool CheckSignature(const CBLSPublicKey& blsPubKey) const;
 
     void SetConfirmedHeight(std::optional<int> nConfirmedHeightIn) { assert(nConfirmedHeightIn == std::nullopt || *nConfirmedHeightIn > 0); nConfirmedHeight = nConfirmedHeightIn; }
@@ -310,9 +307,9 @@ protected:
 
     CMutableTransaction finalMutableTransaction GUARDED_BY(cs_coinjoin); // the finalized transaction ready for signing
 
-    virtual void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_coinjoin);
+    void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_coinjoin);
 
-    bool IsValidInOuts(CChainState& active_chainstate, const CTxMemPool& mempool, const std::vector<CTxIn>& vin, const std::vector<CTxOut>& vout, PoolMessage& nMessageIDRet, bool* fConsumeCollateralRet) const;
+    bool IsValidInOuts(const CTxMemPool& mempool, const std::vector<CTxIn>& vin, const std::vector<CTxOut>& vout, PoolMessage& nMessageIDRet, bool* fConsumeCollateralRet) const;
 
 public:
     int nSessionDenom{0}; // Users must submit a denom matching this
@@ -322,7 +319,7 @@ public:
     int GetState() const { return nState; }
     std::string GetStateString() const;
 
-    int GetEntriesCount() const EXCLUSIVE_LOCKS_REQUIRED(!cs_coinjoin) { LOCK(cs_coinjoin); return vecEntries.size(); }
+    int GetEntriesCount() const LOCKS_EXCLUDED(cs_coinjoin) { LOCK(cs_coinjoin); return vecEntries.size(); }
     int GetEntriesCountLocked() const EXCLUSIVE_LOCKS_REQUIRED(cs_coinjoin) { return vecEntries.size(); }
 };
 
@@ -335,26 +332,14 @@ protected:
     // The current mixing sessions in progress on the network
     std::vector<CCoinJoinQueue> vecCoinJoinQueue GUARDED_BY(cs_vecqueue);
 
-    void SetNull() EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue);
-    void CheckQueue() EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue);
+    void SetNull() LOCKS_EXCLUDED(cs_vecqueue);
+    void CheckQueue() LOCKS_EXCLUDED(cs_vecqueue);
 
 public:
     CCoinJoinBaseManager() = default;
 
-    int GetQueueSize() const EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue) { LOCK(cs_vecqueue); return vecCoinJoinQueue.size(); }
-    bool GetQueueItemAndTry(CCoinJoinQueue& dsqRet) EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue);
-
-    bool HasQueue(const uint256& queueHash) EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue)
-    {
-        LOCK(cs_vecqueue);
-        return std::any_of(vecCoinJoinQueue.begin(), vecCoinJoinQueue.end(),
-                           [&queueHash](auto q) { return q.GetHash() == queueHash; });
-    }
-    std::optional<CCoinJoinQueue> GetQueueFromHash(const uint256& queueHash) EXCLUSIVE_LOCKS_REQUIRED(!cs_vecqueue)
-    {
-        LOCK(cs_vecqueue);
-        return ranges::find_if_opt(vecCoinJoinQueue, [&queueHash](const auto& q) { return q.GetHash() == queueHash; });
-    }
+    int GetQueueSize() const LOCKS_EXCLUDED(cs_vecqueue) { LOCK(cs_vecqueue); return vecCoinJoinQueue.size(); }
+    bool GetQueueItemAndTry(CCoinJoinQueue& dsqRet) LOCKS_EXCLUDED(cs_vecqueue);
 };
 
 // Various helpers and dstx manager implementation
@@ -369,7 +354,8 @@ namespace CoinJoin
     constexpr CAmount GetMaxPoolAmount() { return COINJOIN_ENTRY_MAX_SIZE * vecStandardDenominations.front(); }
 
     /// If the collateral is valid given by a client
-    bool IsCollateralValid(ChainstateManager& chainman, const CTxMemPool& mempool, const CTransaction& txCollateral);
+    bool IsCollateralValid(CTxMemPool& mempool, const CTransaction& txCollateral);
+
 }
 
 class CDSTXManager
@@ -379,30 +365,25 @@ class CDSTXManager
 
 public:
     CDSTXManager() = default;
-    void AddDSTX(const CCoinJoinBroadcastTx& dstx) EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
-    CCoinJoinBroadcastTx GetDSTX(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
+    void AddDSTX(const CCoinJoinBroadcastTx& dstx) LOCKS_EXCLUDED(cs_mapdstx);
+    CCoinJoinBroadcastTx GetDSTX(const uint256& hash) LOCKS_EXCLUDED(cs_mapdstx);
 
-    void UpdatedBlockTip(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler,
-                         const CMasternodeSync& mn_sync)
-        EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
-    void NotifyChainLock(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler,
-                         const CMasternodeSync& mn_sync)
-        EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
+    void UpdatedBlockTip(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler, const CMasternodeSync& mn_sync);
+    void NotifyChainLock(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler, const CMasternodeSync& mn_sync);
 
-    void TransactionAddedToMempool(const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
-    void BlockConnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindex)
-        EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
-    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex*)
-        EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
+    void TransactionAddedToMempool(const CTransactionRef& tx) LOCKS_EXCLUDED(cs_mapdstx);
+    void BlockConnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindex) LOCKS_EXCLUDED(cs_mapdstx);
+    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex*) LOCKS_EXCLUDED(cs_mapdstx);
 
 private:
-    void CheckDSTXes(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler)
-        EXCLUSIVE_LOCKS_REQUIRED(!cs_mapdstx);
-    void UpdateDSTXConfirmedHeight(const CTransactionRef& tx, std::optional<int> nHeight)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_mapdstx);
+    void CheckDSTXes(const CBlockIndex* pindex, const llmq::CChainLocksHandler& clhandler);
+    void UpdateDSTXConfirmedHeight(const CTransactionRef& tx, std::optional<int> nHeight);
+
 };
 
-bool ATMPIfSaneFee(ChainstateManager& chainman, const CTransactionRef& tx, bool test_accept = false)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool ATMPIfSaneFee(CChainState& active_chainstate, CTxMemPool& pool,
+                   const CTransactionRef &tx, bool test_accept = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+extern std::unique_ptr<CDSTXManager> dstxManager;
 
 #endif // BITCOIN_COINJOIN_COINJOIN_H

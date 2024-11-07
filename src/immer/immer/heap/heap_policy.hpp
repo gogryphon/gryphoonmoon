@@ -85,7 +85,8 @@ struct enable_optimized_heap_policy
  * @rst
  *
  * .. tip:: For many applications that use immutable data structures
- *    significantly, this is actually the best heap policy.
+ *    significantly, this is actually the best heap policy, and it
+ *    might become the default in the future.
  *
  *    Note that most our data structures internally use trees with the
  *    same big branching factors.  This means that all *vectors*,

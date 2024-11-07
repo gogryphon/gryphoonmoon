@@ -152,8 +152,6 @@ public:
 
     /** Make a DatabaseBatch connected to this database */
     virtual std::unique_ptr<DatabaseBatch> MakeBatch(bool flush_on_close = true) = 0;
-
-    virtual bool SupportsAutoBackup() { return false; }
 };
 
 /** RAII class that provides access to a DummyDatabase. Never fails. */
@@ -222,7 +220,6 @@ enum class DatabaseStatus {
     FAILED_LOAD,
     FAILED_VERIFY,
     FAILED_ENCRYPT,
-    FAILED_INVALID_BACKUP_FILE,
 };
 
 /** Recursively list database paths in directory. */

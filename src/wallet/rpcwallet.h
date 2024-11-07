@@ -33,12 +33,12 @@ Span<const CRPCCommand> GetWalletRPCCommands();
  */
 std::shared_ptr<CWallet> GetWalletForJSONRPCRequest(const JSONRPCRequest& request);
 
-void EnsureWalletIsUnlocked(const CWallet&);
+void EnsureWalletIsUnlocked(const CWallet *);
 WalletContext& EnsureWalletContext(const CoreContext& context);
 LegacyScriptPubKeyMan& EnsureLegacyScriptPubKeyMan(CWallet& wallet, bool also_create = false);
 
-RPCHelpMan getaddressinfo();
-RPCHelpMan getrawchangeaddress();
-RPCHelpMan addmultisigaddress();
-RPCHelpMan signrawtransactionwithwallet();
+UniValue getaddressinfo(const JSONRPCRequest& request);
+UniValue getrawchangeaddress(const JSONRPCRequest& request);
+UniValue addmultisigaddress(const JSONRPCRequest& request);
+UniValue signrawtransactionwithwallet(const JSONRPCRequest& request);
 #endif //BITCOIN_WALLET_RPCWALLET_H

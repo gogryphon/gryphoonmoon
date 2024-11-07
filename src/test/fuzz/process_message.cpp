@@ -18,7 +18,6 @@
 #include <test/util/net.h>
 #include <test/util/setup_common.h>
 #include <test/util/validation.h>
-#include <txorphanage.h>
 #include <validationinterface.h>
 #include <version.h>
 
@@ -64,9 +63,7 @@ void initialize_process_message()
 {
     Assert(GetNumMsgTypes() == getAllNetMessageTypes().size()); // If this fails, add or remove the message type below
 
-    static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>(
-            /*chain_name=*/CBaseChainParams::REGTEST,
-            /*extra_args=*/{"-txreconciliation"});
+    static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>();
     g_setup = testing_setup.get();
     for (int i = 0; i < 2 * COINBASE_MATURITY; i++) {
         MineBlock(g_setup->m_node, CScript() << OP_TRUE);
@@ -83,16 +80,17 @@ void fuzz_target(FuzzBufferType buffer, const std::string& LIMIT_TO_MESSAGE_TYPE
     SetMockTime(1610000000); // any time to successfully reset ibd
     chainstate.ResetIbd();
 
-    LOCK(NetEventsInterface::g_msgproc_mutex);
-
     const std::string random_message_type{fuzzed_data_provider.ConsumeBytesAsString(CMessageHeader::COMMAND_SIZE).c_str()};
     if (!LIMIT_TO_MESSAGE_TYPE.empty() && random_message_type != LIMIT_TO_MESSAGE_TYPE) {
         return;
     }
     CNode& p2p_node = *ConsumeNodeAsUniquePtr(fuzzed_data_provider).release();
 
+    const bool successfully_connected{fuzzed_data_provider.ConsumeBool()};
+    p2p_node.fSuccessfullyConnected = successfully_connected;
     connman.AddTestNode(p2p_node);
-    FillNode(fuzzed_data_provider, connman, p2p_node);
+    g_setup->m_node.peerman->InitializeNode(&p2p_node);
+    FillNode(fuzzed_data_provider, p2p_node, /* init_version */ successfully_connected);
 
     const auto mock_time = ConsumeTime(fuzzed_data_provider);
     SetMockTime(mock_time);
@@ -100,11 +98,15 @@ void fuzz_target(FuzzBufferType buffer, const std::string& LIMIT_TO_MESSAGE_TYPE
     // fuzzed_data_provider is fully consumed after this call, don't use it
     CDataStream random_bytes_data_stream{fuzzed_data_provider.ConsumeRemainingBytes<unsigned char>(), SER_NETWORK, PROTOCOL_VERSION};
     try {
-        g_setup->m_node.peerman->ProcessMessage(p2p_node, random_message_type, random_bytes_data_stream, GetTime<std::chrono::microseconds>(), std::atomic<bool>{false});
+        g_setup->m_node.peerman->ProcessMessage(p2p_node, random_message_type, random_bytes_data_stream, GetTimeMillis(), std::atomic<bool>{false});
     } catch (const std::ios_base::failure& e) {
     }
-    g_setup->m_node.peerman->SendMessages(&p2p_node);
+    {
+        LOCK(p2p_node.cs_sendProcessing);
+        g_setup->m_node.peerman->SendMessages(&p2p_node);
+    }
     SyncWithValidationInterfaceQueue();
+    LOCK2(::cs_main, g_cs_orphans); // See init.cpp for rationale for implicit locking order requirement
     g_setup->m_node.connman->StopNodes();
 }
 
@@ -176,7 +178,6 @@ FUZZ_TARGET_MSG(sendcmpct);
 FUZZ_TARGET_MSG(senddsq);
 FUZZ_TARGET_MSG(sendheaders);
 FUZZ_TARGET_MSG(sendheaders2);
-FUZZ_TARGET_MSG(sendtxrcncl);
 FUZZ_TARGET_MSG(spork);
 FUZZ_TARGET_MSG(ssc);
 FUZZ_TARGET_MSG(tx);

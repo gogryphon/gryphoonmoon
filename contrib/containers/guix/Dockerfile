@@ -2,7 +2,7 @@
 #       to use 'docker compose run guix_ubuntu' to drop into an
 #       interactive shell
 
-FROM ubuntu:jammy
+FROM ubuntu:focal
 
 SHELL ["/bin/bash", "-c"]
 
@@ -26,7 +26,7 @@ ARG guix_checksum_aarch64=72d807392889919940b7ec9632c45a259555e6b0942ea7bfd13110
 ARG guix_checksum_x86_64=236ca7c9c5958b1f396c2924fcc5bc9d6fdebcb1b4cf3c7c6d46d4bf660ed9c9
 ARG builder_count=32
 
-ENV PATH="/usr/local/bin:/usr/local/guix/current/bin:$PATH"
+ENV PATH /usr/local/bin:/usr/local/guix/current/bin:$PATH
 
 # Application Setup
 # https://guix.gnu.org/manual/en/html_node/Application-Setup.html
@@ -82,12 +82,12 @@ COPY --from=docker_root ./scripts/guix-start /usr/local/bin/guix-start
 # Create directories for mounting to save/restore cache and grant necessary permissions
 RUN mkdir -p \
         /home/${USERNAME}/.cache \
-        /src/dash/depends/{built,sources,work} && \
+        /src/gryphonmoon/depends/{built,sources,work} && \
     chown -R ${USER_ID}:${GROUP_ID} \
         /home/${USERNAME}/.cache \
         /src
 
-WORKDIR "/src/dash"
+WORKDIR "/src/gryphonmoon"
 
 # Switch to unprivileged context
 USER ${USERNAME}

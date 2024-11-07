@@ -3,7 +3,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chainparamsbase.h>
-#include <consensus/amount.h>
 #include <key_io.h>
 #include <outputtype.h>
 #include <pubkey.h>
@@ -11,7 +10,6 @@
 #include <script/descriptor.h>
 #include <script/signingprovider.h>
 #include <tinyformat.h>
-#include <util/check.h>
 #include <util/system.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -19,16 +17,6 @@
 
 const std::string UNIX_EPOCH_TIME = "UNIX epoch time";
 const std::string EXAMPLE_ADDRESS[2] = {"XunLY9Tf7Zsef8gMGL2fhWA9ZmMjt4KPw0", "XwQQkwA4FYkq2XERzMY2CiAZhJTEDAbtc0"};
-
-std::string GetAllOutputTypes()
-{
-    std::vector<std::string> ret;
-    using U = std::underlying_type<TxoutType>::type;
-    for (U i = (U)TxoutType::NONSTANDARD; i <= (U)TxoutType::NULL_DATA; ++i) {
-        ret.emplace_back(GetTxnOutputType(static_cast<TxoutType>(i)));
-    }
-    return Join(ret, ", ");
-}
 
 void RPCTypeCheck(const UniValue& params,
                   const std::list<UniValueType>& typesExpected,
@@ -84,12 +72,12 @@ void RPCTypeCheckObj(const UniValue& o,
     }
 }
 
-CAmount AmountFromValue(const UniValue& value, int decimals)
+CAmount AmountFromValue(const UniValue& value)
 {
     if (!value.isNum() && !value.isStr())
         throw JSONRPCError(RPC_TYPE_ERROR, "Amount is not a number or string");
     CAmount amount;
-    if (!ParseFixedPoint(value.getValStr(), decimals, &amount))
+    if (!ParseFixedPoint(value.getValStr(), 8, &amount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
     if (!MoneyRange(amount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Amount out of range");
@@ -141,6 +129,15 @@ int64_t ParseInt64V(const UniValue& v, const std::string &strName)
     return num;
 }
 
+double ParseDoubleV(const UniValue& v, const std::string &strName)
+{
+    std::string strNum = v.getValStr();
+    double num;
+    if (!ParseDouble(strNum, &num))
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strName+" must be a be number (not '"+strNum+"')");
+    return num;
+}
+
 bool ParseBoolV(const UniValue& v, const std::string &strName)
 {
     std::string strBool;
@@ -161,79 +158,16 @@ bool ParseBoolV(const UniValue& v, const std::string &strName)
     throw JSONRPCError(RPC_INVALID_PARAMETER, strName+" must be true, false, yes, no, 1 or 0 (not '"+strBool+"')");
 }
 
-namespace {
-
-/**
- * Quote an argument for shell.
- *
- * @note This is intended for help, not for security-sensitive purposes.
- */
-std::string ShellQuote(const std::string& s)
-{
-    std::string result;
-    result.reserve(s.size() * 2);
-    for (const char ch: s) {
-        if (ch == '\'') {
-            result += "'\''";
-        } else {
-            result += ch;
-        }
-    }
-    return "'" + result + "'";
-}
-
-/**
- * Shell-quotes the argument if it needs quoting, else returns it literally, to save typing.
- *
- * @note This is intended for help, not for security-sensitive purposes.
- */
-std::string ShellQuoteIfNeeded(const std::string& s)
-{
-    for (const char ch: s) {
-        if (ch == ' ' || ch == '\'' || ch == '"') {
-            return ShellQuote(s);
-        }
-    }
-
-    return s;
-}
-
-}
-
 std::string HelpExampleCli(const std::string& methodname, const std::string& args)
 {
-    return "> dash-cli " + methodname + " " + args + "\n";
-}
-
-std::string HelpExampleCliNamed(const std::string& methodname, const RPCArgList& args)
-{
-    std::string result = "> dash-cli -named " + methodname;
-    for (const auto& argpair: args) {
-        const auto& value = argpair.second.isStr()
-                ? argpair.second.get_str()
-                : argpair.second.write();
-        result += " " + argpair.first + "=" + ShellQuoteIfNeeded(value);
-    }
-    result += "\n";
-    return result;
+    return "> gryphonmoon-cli " + methodname + " " + args + "\n";
 }
 
 std::string HelpExampleRpc(const std::string& methodname, const std::string& args)
 {
     return "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\": \"curltest\", "
         "\"method\": \"" + methodname + "\", \"params\": [" + args + "]}' -H 'content-type: text/plain;'"
-        " http://127.0.0.1:9998/\n";
-}
-
-std::string HelpExampleRpcNamed(const std::string& methodname, const RPCArgList& args)
-{
-    UniValue params(UniValue::VOBJ);
-    for (const auto& param: args) {
-        params.pushKV(param.first, param.second);
-    }
-
-    return "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\": \"curltest\", "
-           "\"method\": \"" + methodname + "\", \"params\": " + params.write() + "}' -H 'content-type: text/plain;' http://127.0.0.1:8332/\n";
+        " http://127.0.0.1:9968/\n";
 }
 
 // Converts a hex string to a public key if possible
@@ -258,7 +192,7 @@ CPubKey AddrToPubKey(const FillableSigningProvider& keystore, const std::string&
     }
     const PKHash *pkhash = std::get_if<PKHash>(&dest);
     if (!pkhash) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("'%s' does not refer to a key", addr_in));
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("%s does not refer to a key", addr_in));
     }
     CPubKey vchPubKey;
     if (!keystore.GetPubKey(ToKeyID(*pkhash), vchPubKey)) {
@@ -280,8 +214,8 @@ CTxDestination AddAndGetMultisigDestination(const int required, const std::vecto
     if ((int)pubkeys.size() < required) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("not enough keys supplied (got %u keys, but need at least %d to redeem)", pubkeys.size(), required));
     }
-    if (pubkeys.size() > MAX_PUBKEYS_PER_MULTISIG) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Number of keys involved in the multisignature address creation > %d\nReduce the number", MAX_PUBKEYS_PER_MULTISIG));
+    if (pubkeys.size() > 16) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Number of keys involved in the multisignature address creation > 16\nReduce the number");
     }
 
     script_out = GetScriptForMultisig(required, pubkeys);
@@ -322,12 +256,11 @@ UniValue DescribeAddress(const CTxDestination& dest)
 
 unsigned int ParseConfirmTarget(const UniValue& value, unsigned int max_target)
 {
-    const int target{value.get_int()};
-    const unsigned int unsigned_target{static_cast<unsigned int>(target)};
-    if (target < 1 || unsigned_target > max_target) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid conf_target, must be between %u and %u", 1, max_target));
+    int target = value.get_int();
+    if (target < 1 || (unsigned int)target > max_target) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid conf_target, must be between %u - %u", 1, max_target));
     }
-    return unsigned_target;
+    return (unsigned int)target;
 }
 
 /**
@@ -473,33 +406,6 @@ RPCHelpMan::RPCHelpMan(std::string name, std::string description, std::vector<RP
         for (const std::string& name : names) {
             CHECK_NONFATAL(named_args.insert(name).second);
         }
-        // Default value type should match argument type only when defined
-        if (arg.m_fallback.index() == 2) {
-            const RPCArg::Type type = arg.m_type;
-            switch (std::get<RPCArg::Default>(arg.m_fallback).getType()) {
-            case UniValue::VOBJ:
-                CHECK_NONFATAL(type == RPCArg::Type::OBJ);
-                break;
-            case UniValue::VARR:
-                CHECK_NONFATAL(type == RPCArg::Type::ARR);
-                break;
-            case UniValue::VSTR:
-                CHECK_NONFATAL(type == RPCArg::Type::STR || type == RPCArg::Type::STR_HEX || type == RPCArg::Type::AMOUNT);
-                break;
-            case UniValue::VNUM:
-                CHECK_NONFATAL(type == RPCArg::Type::NUM || type == RPCArg::Type::AMOUNT || type == RPCArg::Type::RANGE);
-                break;
-            case UniValue::VBOOL:
-                CHECK_NONFATAL(type == RPCArg::Type::BOOL);
-                break;
-            case UniValue::VNULL:
-                // Null values are accepted in all arguments
-                break;
-            default:
-                NONFATAL_UNREACHABLE();
-                break;
-            }
-        }
     }
 }
 
@@ -507,7 +413,6 @@ std::string RPCResults::ToDescriptionString() const
 {
     std::string result;
     for (const auto& r : m_results) {
-        if (r.m_type == RPCResult::Type::ANY) continue; // for testing only
         if (r.m_cond.empty()) {
             result += "\nResult:\n";
         } else {
@@ -523,21 +428,6 @@ std::string RPCResults::ToDescriptionString() const
 std::string RPCExamples::ToDescriptionString() const
 {
     return m_examples.empty() ? m_examples : "\nExamples:\n" + m_examples;
-}
-
-UniValue RPCHelpMan::HandleRequest(const JSONRPCRequest& request) const
-{
-    if (request.mode == JSONRPCRequest::GET_ARGS) {
-        return GetArgMap();
-    }
-    /*
-     * Check if the given request is valid according to this command or if
-     * the user is asking for help information, and throw help when appropriate.
-     */
-    if (request.mode == JSONRPCRequest::GET_HELP || !IsValidNumArgs(request.params.size())) {
-        throw std::runtime_error(ToString());
-    }
-    return m_fun(*this, request);
 }
 
 bool RPCHelpMan::IsValidNumArgs(size_t num_args) const
@@ -569,7 +459,7 @@ std::string RPCHelpMan::ToString() const
     ret += m_name;
     bool was_optional{false};
     for (const auto& arg : m_args) {
-        if (arg.m_hidden) break; // Any arg that follows is also hidden
+        if (arg.m_hidden) continue;
         const bool optional = arg.IsOptional();
         ret += " ";
         if (optional) {
@@ -591,7 +481,7 @@ std::string RPCHelpMan::ToString() const
     Sections sections;
     for (size_t i{0}; i < m_args.size(); ++i) {
         const auto& arg = m_args.at(i);
-        if (arg.m_hidden) break; // Any arg that follows is also hidden
+        if (arg.m_hidden) continue;
 
         if (i == 0) ret += "\nArguments:\n";
 
@@ -613,25 +503,6 @@ std::string RPCHelpMan::ToString() const
     return ret;
 }
 
-UniValue RPCHelpMan::GetArgMap() const
-{
-    UniValue arr{UniValue::VARR};
-    for (int i{0}; i < int(m_args.size()); ++i) {
-        const auto& arg = m_args.at(i);
-        std::vector<std::string> arg_names = SplitString(arg.m_names, '|');
-        for (const auto& arg_name : arg_names) {
-            UniValue map{UniValue::VARR};
-            map.push_back(m_name);
-            map.push_back(i);
-            map.push_back(arg_name);
-            map.push_back(arg.m_type == RPCArg::Type::STR ||
-                          arg.m_type == RPCArg::Type::STR_HEX);
-            arr.push_back(map);
-        }
-    }
-    return arr;
-}
-
 std::string RPCArg::GetFirstName() const
 {
     return m_names.substr(0, m_names.find("|"));
@@ -645,7 +516,7 @@ std::string RPCArg::GetName() const
 
 bool RPCArg::IsOptional() const
 {
-    if (m_fallback.index() != 0) {
+    if (m_fallback.index() == 1) {
         return true;
     } else {
         return RPCArg::Optional::NO != std::get<RPCArg::Optional>(m_fallback);
@@ -693,9 +564,7 @@ std::string RPCArg::ToDescriptionString() const
         } // no default case, so the compiler can warn about missing cases
     }
     if (m_fallback.index() == 1) {
-        ret += ", optional, default=" + std::get<RPCArg::DefaultHint>(m_fallback);
-    } else if (m_fallback.index() == 2) {
-        ret += ", optional, default=" + std::get<RPCArg::Default>(m_fallback).write();
+        ret += ", optional, default=" + std::get<std::string>(m_fallback);
     } else {
         switch (std::get<RPCArg::Optional>(m_fallback)) {
         case RPCArg::Optional::OMITTED: {
@@ -743,9 +612,6 @@ void RPCResult::ToSections(Sections& sections, const OuterType outer_type, const
         // If the inner result is empty, use three dots for elision
         sections.PushSection({indent + "..." + maybe_separator, m_description});
         return;
-    }
-    case Type::ANY: {
-        NONFATAL_UNREACHABLE(); // Only for testing
     }
     case Type::NONE: {
         sections.PushSection({indent + "null" + maybe_separator, Description("json null")});
@@ -809,43 +675,7 @@ void RPCResult::ToSections(Sections& sections, const OuterType outer_type, const
         return;
     }
     } // no default case, so the compiler can warn about missing cases
-    NONFATAL_UNREACHABLE();
-}
-
-bool RPCResult::MatchesType(const UniValue& result) const
-{
-    switch (m_type) {
-    case Type::ELISION: {
-        return false;
-    }
-    case Type::ANY: {
-        return true;
-    }
-    case Type::NONE: {
-        return UniValue::VNULL == result.getType();
-    }
-    case Type::STR:
-    case Type::STR_HEX: {
-        return UniValue::VSTR == result.getType();
-    }
-    case Type::NUM:
-    case Type::STR_AMOUNT:
-    case Type::NUM_TIME: {
-        return UniValue::VNUM == result.getType();
-    }
-    case Type::BOOL: {
-        return UniValue::VBOOL == result.getType();
-    }
-    case Type::ARR_FIXED:
-    case Type::ARR: {
-        return UniValue::VARR == result.getType();
-    }
-    case Type::OBJ_DYN:
-    case Type::OBJ: {
-        return UniValue::VOBJ == result.getType();
-    }
-    } // no default case, so the compiler can warn about missing cases
-    NONFATAL_UNREACHABLE();
+    CHECK_NONFATAL(false);
 }
 
 std::string RPCArg::ToStringObj(const bool oneline) const
@@ -880,9 +710,9 @@ std::string RPCArg::ToStringObj(const bool oneline) const
     case Type::OBJ:
     case Type::OBJ_USER_KEYS:
         // Currently unused, so avoid writing dead code
-        NONFATAL_UNREACHABLE();
+        CHECK_NONFATAL(false);
     } // no default case, so the compiler can warn about missing cases
-    NONFATAL_UNREACHABLE();
+    CHECK_NONFATAL(false);
 }
 
 std::string RPCArg::ToString(const bool oneline) const
@@ -917,7 +747,7 @@ std::string RPCArg::ToString(const bool oneline) const
         return "[" + res + "...]";
     }
     } // no default case, so the compiler can warn about missing cases
-    NONFATAL_UNREACHABLE();
+    CHECK_NONFATAL(false);
 }
 
 static std::pair<int64_t, int64_t> ParseRange(const UniValue& value)

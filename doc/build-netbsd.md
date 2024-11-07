@@ -2,11 +2,11 @@ NetBSD Build Guide
 ======================
 **Updated for NetBSD [8.0](https://www.netbsd.org/releases/formal-8/NetBSD-8.0.html)**
 
-This guide describes how to build dashd and command-line utilities on NetBSD.
+This guide describes how to build gryphonmoond and command-line utilities on NetBSD.
 
 This guide does not contain instructions for building the GUI.
 
-**This guide has not been tested for building Dash Core and is expected to fail due to missing `bls_dash` and `backtrace`. Please report your results; contributions welcome.**
+**This guide has not been tested for building Gryphonmoon Core and is expected to fail due to missing `bls_dash` and `backtrace`. Please report your results; contributions welcome.**
 
 Preparation
 -------------
@@ -25,7 +25,7 @@ libtool
 pkg-config
 python37
 
-git clone https://github.com/dashpay/dash.git
+git clone https://github.com/gogryphon/gryphonmoon.git
 ```
 
 See [dependencies.md](dependencies.md) for a complete overview.
@@ -50,7 +50,7 @@ from the root of the repository. Then set `BDB_PREFIX` for the next section:
 export BDB_PREFIX="$PWD/db4"
 ```
 
-### Building Dash Core
+### Building Gryphonmoon Core
 
 **Important**: Use `gmake` (the non-GNU `make` will exit with an error).
 
@@ -79,6 +79,6 @@ Without wallet:
 
 Build and run the tests:
 ```bash
-gmake # use "-j N" here for N parallel jobs
+gmake # use -jX here for parallelism
 gmake check
 ```

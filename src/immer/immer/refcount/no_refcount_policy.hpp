@@ -24,6 +24,7 @@ struct no_refcount_policy
 
     void inc() {}
     bool dec() { return false; }
+    void dec_unsafe() {}
     bool unique() { return false; }
 };
 

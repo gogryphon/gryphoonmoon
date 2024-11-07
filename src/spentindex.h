@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
-// Copyright (c) 2016 BitPay Inc.
-// Copyright (c) 2023-2024 The Dash Core developers
+// Copyright (c) 2016 BitPay, Inc.
+// Copyright (c) 2023 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,20 +9,12 @@
 #define BITCOIN_SPENTINDEX_H
 
 #include <addressindex.h>
-#include <consensus/amount.h>
+#include <amount.h>
 #include <script/script.h>
 #include <serialize.h>
 #include <uint256.h>
 
 #include <tuple>
-
-struct CAddressUnspentKey;
-struct CAddressUnspentValue;
-struct CSpentIndexKey;
-struct CSpentIndexValue;
-
-using CAddressUnspentIndexEntry = std::pair<CAddressUnspentKey, CAddressUnspentValue>;
-using CSpentIndexEntry = std::pair<CSpentIndexKey, CSpentIndexValue>;
 
 struct CSpentIndexKey {
 public:

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Dash Core developers
+// Copyright (c) 2014-2021 The Dash Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -68,7 +68,7 @@ void CGovernanceObjectVoteFile::RemoveVotesFromMasternode(const COutPoint& outpo
     }
 }
 
-std::set<uint256> CGovernanceObjectVoteFile::RemoveInvalidVotes(const CDeterministicMNList& tip_mn_list, const COutPoint& outpointMasternode, bool fProposal)
+std::set<uint256> CGovernanceObjectVoteFile::RemoveInvalidVotes(const COutPoint& outpointMasternode, bool fProposal)
 {
     std::set<uint256> removedVotes;
 
@@ -76,7 +76,7 @@ std::set<uint256> CGovernanceObjectVoteFile::RemoveInvalidVotes(const CDetermini
     while (it != listVotes.end()) {
         if (it->GetMasternodeOutpoint() == outpointMasternode) {
             bool useVotingKey = fProposal && (it->GetSignal() == VOTE_SIGNAL_FUNDING);
-            if (!it->IsValid(tip_mn_list, useVotingKey)) {
+            if (!it->IsValid(useVotingKey)) {
                 removedVotes.emplace(it->GetHash());
                 --nMemoryVotes;
                 mapVoteIndex.erase(it->GetHash());

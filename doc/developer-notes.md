@@ -25,13 +25,12 @@ Developer Notes
     - [Threads](#threads)
     - [Ignoring IDE/editor files](#ignoring-ideeditor-files)
 - [Development guidelines](#development-guidelines)
-    - [General Dash Core](#general-dash-core)
+    - [General Gryphonmoon Core](#general-gryphonmoon-core)
     - [Wallet](#wallet)
     - [General C++](#general-c)
     - [C++ data structures](#c-data-structures)
     - [Strings and formatting](#strings-and-formatting)
     - [Shadowing](#shadowing)
-    - [Lifetimebound](#lifetimebound)
     - [Threads and synchronization](#threads-and-synchronization)
     - [Scripts](#scripts)
         - [Shebang](#shebang)
@@ -96,10 +95,7 @@ code.
     Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Renum-caps),
     which recommend using `snake_case`.  Please use what seems appropriate.
   - Class names, function names, and method names are UpperCamelCase
-    (PascalCase). Do not prefix class names with `C`. See [Internal interface
-    naming style](#internal-interface-naming-style) for an exception to this
-    convention.
-
+    (PascalCase). Do not prefix class names with `C`.
   - Test suite naming convention: The Boost test suite in file
     `src/test/foo_tests.cpp` should be named `foo_tests`. Test suite names
     must be unique.
@@ -164,85 +160,15 @@ public:
 } // namespace foo
 ```
 
-Coding Style (C++ functions and methods)
---------------------
-
-- When ordering function parameters, place input parameters first, then any
-  in-out parameters, followed by any output parameters.
-
-- *Rationale*: API consistency.
-
-- Prefer returning values directly to using in-out or output parameters. Use
-  `std::optional` where helpful for returning values.
-
-- *Rationale*: Less error-prone (no need for assumptions about what the output
-  is initialized to on failure), easier to read, and often the same or better
-  performance.
-
-- Generally, use `std::optional` to represent optional by-value inputs (and
-  instead of a magic default value, if there is no real default). Non-optional
-  input parameters should usually be values or const references, while
-  non-optional in-out and output parameters should usually be references, as
-  they cannot be null.
-
-Coding Style (C++ named arguments)
-------------------------------
-
-When passing named arguments, use a format that clang-tidy understands. The
-argument names can otherwise not be verified by clang-tidy.
-
-For example:
-
-```c++
-void function(Addrman& addrman, bool clear);
-
-int main()
-{
-    function(g_addrman, /*clear=*/false);
-}
-```
-
-### Running clang-tidy
-
-To run clang-tidy on Ubuntu/Debian, install the dependencies:
-
-```sh
-apt install clang-tidy bear clang
-```
-
-Then, pass clang as compiler to configure, and use bear to produce the `compile_commands.json`:
-
-```sh
-./autogen.sh && ./configure CC=clang CXX=clang++ --enable-suppress-external-warnings
-make clean && bear --config src/.bear-tidy-config -- make -j $(nproc)
-```
-
-The output is denoised of errors from external dependencies and includes with
-`--enable-suppress-external-warnings` and `--config src/.bear-tidy-config`. Both
-options may be omitted to view the full list of errors.
-
-To run clang-tidy on all source files:
-
-```sh
-( cd ./src/ && run-clang-tidy  -j $(nproc) )
-```
-
-To run clang-tidy on the changed source lines:
-
-```sh
-git diff | ( cd ./src/ && clang-tidy-diff -p2 -j $(nproc) )
-```
-
 Coding Style (Python)
 ---------------------
 
 Refer to [/test/functional/README.md#style-guidelines](/test/functional/README.md#style-guidelines).
 
-
 Coding Style (Doxygen-compatible comments)
 ------------------------------------------
 
-Dash Core uses [Doxygen](https://www.doxygen.nl/) to generate its official documentation.
+Gryphonmoon Core uses [Doxygen](https://www.doxygen.nl/) to generate its official documentation.
 
 Use Doxygen-compatible comment blocks for functions, methods, and fields.
 
@@ -354,7 +280,7 @@ produce better debugging builds.
 ### Show sources in debugging
 
 If you have ccache enabled, absolute paths are stripped from debug information
-with the `-fdebug-prefix-map` and `-fmacro-prefix-map` options (if supported by the
+with the -fdebug-prefix-map and -fmacro-prefix-map options (if supported by the
 compiler). This might break source file detection in case you move binaries
 after compilation, debug from the directory other than the project root or use
 an IDE that only supports absolute paths for debugging.
@@ -406,7 +332,7 @@ that run in `-regtest` mode.
 
 ### DEBUG_LOCKORDER
 
-Dash Core is a multi-threaded application, and deadlocks or other
+Gryphonmoon Core is a multi-threaded application, and deadlocks or other
 multi-threading bugs can be very difficult to track down. The `--enable-debug`
 configure option adds `-DDEBUG_LOCKORDER` to the compiler flags. This inserts
 run-time checks to keep track of which locks are held and adds warnings to the
@@ -443,15 +369,15 @@ other input.
 
 Valgrind is a programming tool for memory debugging, memory leak detection, and
 profiling. The repo contains a Valgrind suppressions file
-([`valgrind.supp`](https://github.com/dashpay/dash/blob/master/contrib/valgrind.supp))
+([`valgrind.supp`](https://github.com/gogryphon/gryphonmoon/blob/master/contrib/valgrind.supp))
 which includes known Valgrind warnings in our dependencies that cannot be fixed
 in-tree. Example use:
 
 ```shell
-$ valgrind --suppressions=contrib/valgrind.supp src/test/test_dash
+$ valgrind --suppressions=contrib/valgrind.supp src/test/test_gryphonmoon
 $ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
-      --show-leak-kinds=all src/test/test_dash --log_level=test_suite
-$ valgrind -v --leak-check=full src/dashd -printtoconsole
+      --show-leak-kinds=all src/test/test_gryphonmoon --log_level=test_suite
+$ valgrind -v --leak-check=full src/gryphonmoond -printtoconsole
 $ ./test/functional/test_runner.py --valgrind
 ```
 
@@ -468,14 +394,14 @@ To enable LCOV report generation during test runs:
 make
 make cov
 
-# A coverage report will now be accessible at `./test_dash.coverage/index.html`.
+# A coverage report will now be accessible at `./test_gryphonmoon.coverage/index.html`.
 ```
 
 ### Performance profiling with perf
 
 Profiling is a good way to get a precise idea of where time is being spent in
 code. One tool for doing profiling on Linux platforms is called
-[`perf`](https://www.brendangregg.com/perf.html), and has been integrated into
+[`perf`](http://www.brendangregg.com/perf.html), and has been integrated into
 the functional test framework. Perf can observe a running process and sample
 (at some frequency) where its execution is.
 
@@ -495,13 +421,13 @@ Make sure you [understand the security
 trade-offs](https://lwn.net/Articles/420403/) of setting these kernel
 parameters.
 
-To profile a running dashd process for 60 seconds, you could use an
+To profile a running gryphonmoond process for 60 seconds, you could use an
 invocation of `perf record` like this:
 
 ```sh
 $ perf record \
     -g --call-graph dwarf --per-thread -F 140 \
-    -p `pgrep dashd` -- sleep 60
+    -p `pgrep gryphonmoond` -- sleep 60
 ```
 
 You could then analyze the results by running:
@@ -517,7 +443,7 @@ See the functional test documentation for how to invoke perf within tests.
 
 ### Sanitizers
 
-Dash Core can be compiled with various "sanitizers" enabled, which add
+Gryphonmoon Core can be compiled with various "sanitizers" enabled, which add
 instrumentation for issues regarding things like memory safety, thread race
 conditions, or undefined behavior. This is controlled with the
 `--with-sanitizers` configure flag, which should be a comma separated list of
@@ -541,19 +467,8 @@ address sanitizer, libtsan for the thread sanitizer, and libubsan for the
 undefined sanitizer. If you are missing required libraries, the configure script
 will fail with a linker error when testing the sanitizer flags.
 
-The test suite should pass cleanly with the `thread` and `undefined` sanitizers. You
-may need to use a suppressions file, see `test/sanitizer_suppressions`. They may be
-used as follows:
-```bash
-export LSAN_OPTIONS="suppressions=$(pwd)/test/sanitizer_suppressions/lsan"
-export TSAN_OPTIONS="suppressions=$(pwd)/test/sanitizer_suppressions/tsan:halt_on_error=1:second_deadlock_stack=1"
-export UBSAN_OPTIONS="suppressions=$(pwd)/test/sanitizer_suppressions/ubsan:print_stacktrace=1:halt_on_error=1:report_error_type=1"
-```
-
-See the CI config for more examples, and upstream documentation for more information
-about any additional options.
-
-There are a number of known problems when using the `address` sanitizer. The
+The test suite should pass cleanly with the `thread` and `undefined` sanitizers,
+but there are a number of known problems when using the `address` sanitizer. The
 address sanitizer is known to fail in
 [sha256_sse4::Transform](/src/crypto/sha256_sse4.cpp) which makes it unusable
 unless you also use `--disable-asm` when running configure. We would like to fix
@@ -597,7 +512,7 @@ and its `cs_KeyStore` lock for example).
 Threads
 -------
 
-- [Main thread (`dashd`)](https://doxygen.bitcoincore.org/bitcoind_8cpp.html#a0ddf1224851353fc92bfbff6f499fa97)
+- [Main thread (`gryphonmoond`)](https://doxygen.bitcoincore.org/bitcoind_8cpp.html#a0ddf1224851353fc92bfbff6f499fa97)
   : Started from `main()` in `bitcoind.cpp`. Responsible for starting up and
   shutting down the application.
 
@@ -636,7 +551,7 @@ Threads
     : Universal plug-and-play startup/shutdown.
 
   - [ThreadSocketHandler (`d-net`)](https://doxygen.bitcoincore.org/class_c_connman.html#a765597cbfe99c083d8fa3d61bb464e34)
-    : Sends/Receives data from peers on port 9999.
+    : Sends/Receives data from peers on port 9969.
 
   - [ThreadOpenAddedConnections (`d-addcon`)](https://doxygen.bitcoincore.org/class_c_connman.html#a0b787caf95e52a346a2b31a580d60a62)
     : Opens network connections to added nodes.
@@ -666,7 +581,7 @@ Ignoring IDE/editor files
 In closed-source environments in which everyone uses the same IDE, it is common
 to add temporary files it produces to the project-wide `.gitignore` file.
 
-However, in open source software such as Dash Core, where everyone uses
+However, in open source software such as Gryphonmoon Core, where everyone uses
 their own editors/IDE/tools, it is less common. Only you know what files your
 editor produces and this may change from version to version. The canonical way
 to do this is thus to create your local gitignore. Add this to `~/.gitconfig`:
@@ -696,9 +611,9 @@ Development guidelines
 ============================
 
 A few non-style-related recommendations for developers, as well as points to
-pay attention to for reviewers of Dash Core code.
+pay attention to for reviewers of Gryphonmoon Core code.
 
-General Dash Core
+General Gryphonmoon Core
 ----------------------
 
 - New features should be exposed on RPC first, then can be made available in the GUI.
@@ -706,7 +621,7 @@ General Dash Core
   - *Rationale*: RPC allows for better automatic testing. The test suite for
     the GUI is very limited.
 
-- Make sure pull requests pass CI before merging.
+- Make sure pull requests pass Travis CI before merging.
 
   - *Rationale*: Makes sure that they pass thorough testing, and that the tester will keep passing
      on the master branch. Otherwise, all new pull requests will start failing the tests, resulting in
@@ -720,6 +635,10 @@ Wallet
 
 - Make sure that no crashes happen with run-time option `-disablewallet`.
 
+- Include `db_cxx.h` (BerkeleyDB header) only when `ENABLE_WALLET` is set.
+
+  - *Rationale*: Otherwise compilation of the disable-wallet build will fail in environments without BerkeleyDB.
+
 General C++
 -------------
 
@@ -730,6 +649,12 @@ Common misconceptions are clarified in those sections:
 
 - Passing (non-)fundamental types in the [C++ Core
   Guideline](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rf-conventional).
+
+- Assertions should not have side-effects.
+
+  - *Rationale*: Even though the source code is set to refuse to compile
+    with assertions disabled, having side-effects in assertions is unexpected and
+    makes the code harder to understand.
 
 - If you use the `.h`, you must link the `.cpp`.
 
@@ -891,7 +816,7 @@ Strings and formatting
 
 - For `strprintf`, `LogPrint`, `LogPrintf` formatting characters don't need size specifiers.
 
-  - *Rationale*: Dash Core uses tinyformat, which is type safe. Leave them out to avoid confusion.
+  - *Rationale*: Gryphonmoon Core uses tinyformat, which is type safe. Leave them out to avoid confusion.
 
 - Use `.c_str()` sparingly. Its only valid use is to pass C++ strings to C functions that take NULL-terminated
   strings.
@@ -923,67 +848,10 @@ from using a different variable with the same name),
 please name variables so that their names do not shadow variables defined in the source code.
 
 When using nested cycles, do not name the inner cycle variable the same as in
-the outer cycle, etc.
-
-Lifetimebound
---------------
-
-The [Clang `lifetimebound`
-attribute](https://clang.llvm.org/docs/AttributeReference.html#lifetimebound)
-can be used to tell the compiler that a lifetime is bound to an object and
-potentially see a compile-time warning if the object has a shorter lifetime from
-the invalid use of a temporary. You can use the attribute by adding a `LIFETIMEBOUND`
-annotation defined in `src/attributes.h`; please grep the codebase for examples.
+the upper cycle, etc.
 
 Threads and synchronization
 ----------------------------
-
-- Prefer `Mutex` type to `RecursiveMutex` one.
-
-- Consistently use [Clang Thread Safety Analysis](https://clang.llvm.org/docs/ThreadSafetyAnalysis.html) annotations to
-  get compile-time warnings about potential race conditions in code. Combine annotations in function declarations with
-  run-time asserts in function definitions:
-
-```C++
-// txmempool.h
-class CTxMemPool
-{
-public:
-    ...
-    mutable RecursiveMutex cs;
-    ...
-    void UpdateTransactionsFromBlock(...) EXCLUSIVE_LOCKS_REQUIRED(::cs_main, cs);
-    ...
-}
-
-// txmempool.cpp
-void CTxMemPool::UpdateTransactionsFromBlock(...)
-{
-    AssertLockHeld(::cs_main);
-    AssertLockHeld(cs);
-    ...
-}
-```
-
-```C++
-// validation.h
-class ChainstateManager
-{
-public:
-    ...
-    bool ProcessNewBlock(...) LOCKS_EXCLUDED(::cs_main);
-    ...
-}
-
-// validation.cpp
-bool ChainstateManager::ProcessNewBlock(...)
-{
-    AssertLockNotHeld(::cs_main);
-    ...
-    LOCK(::cs_main);
-    ...
-}
-```
 
 - Build and run tests with `-DDEBUG_LOCKORDER` to verify that no potential
   deadlocks are introduced.
@@ -1010,8 +878,6 @@ TRY_LOCK(cs_vNodes, lockNodes);
 
 Scripts
 --------------------------
-
-Write scripts in Python rather than bash, when possible.
 
 ### Shebang
 
@@ -1124,7 +990,7 @@ directly upstream without being PRed directly against the project. They will be 
 subtree merge.
 
 Others are external projects without a tight relationship with our project. Changes to these should also
-be sent upstream, but bugfixes may also be prudent to PR against Dash Core so that they can be integrated
+be sent upstream, but bugfixes may also be prudent to PR against Gryphonmoon Core so that they can be integrated
 quickly. Cosmetic changes should be purely taken upstream.
 
 There is a tool in `test/lint/git-subtree-check.sh` ([instructions](../test/lint#git-subtree-checksh)) to check a subtree directory for consistency with
@@ -1151,9 +1017,6 @@ Current subtrees include:
 - src/univalue
   - Upstream at https://github.com/bitcoin-core/univalue ; actively maintained by Core contributors, deviates from upstream https://github.com/jgarzik/univalue
 
-- src/minisketch
-  - Upstream at https://github.com/sipa/minisketch ; maintained by Core contributors.
-
 Upgrading LevelDB
 ---------------------
 
@@ -1175,7 +1038,7 @@ In addition to reviewing the upstream changes in `env_posix.cc`, you can use `ls
 check this. For example, on Linux this command will show open `.ldb` file counts:
 
 ```bash
-$ lsof -p $(pidof dashd) |\
+$ lsof -p $(pidof gryphonmoond) |\
     awk 'BEGIN { fd=0; mem=0; } /ldb$/ { if ($4 == "mem") mem++; else fd++ } END { printf "mem = %s, fd = %s\n", mem, fd}'
 mem = 119, fd = 0
 ```
@@ -1205,7 +1068,7 @@ Scripted diffs
 --------------
 
 For reformatting and refactoring commits where the changes can be easily automated using a bash script, we use
-scripted-diff commits. The bash script is included in the commit message and our CI job checks that
+scripted-diff commits. The bash script is included in the commit message and our Travis CI job checks that
 the result of the script is identical to the commit. This aids reviewers since they can verify that the script
 does exactly what it is supposed to do. It is also helpful for rebasing (since the same script can just be re-run
 on the new master commit).
@@ -1331,7 +1194,7 @@ A few guidelines for introducing and reviewing new RPC interfaces:
 - Try not to overload methods on argument type. E.g. don't make `getblock(true)` and `getblock("hash")`
   do different things.
 
-  - *Rationale*: This is impossible to use with `dash-cli`, and can be surprising to users.
+  - *Rationale*: This is impossible to use with `gryphonmoon-cli`, and can be surprising to users.
 
   - *Exception*: Some RPC calls can take both an `int` and `bool`, most notably when a bool was switched
     to a multi-value, or due to other historical reasons. **Always** have false map to 0 and
@@ -1343,7 +1206,7 @@ A few guidelines for introducing and reviewing new RPC interfaces:
 
 - Add every non-string RPC argument `(method, idx, name)` to the table `vRPCConvertParams` in `rpc/client.cpp`.
 
-  - *Rationale*: `dash-cli` and the GUI debug console use this table to determine how to
+  - *Rationale*: `gryphonmoon-cli` and the GUI debug console use this table to determine how to
     convert a plaintext command line to JSON. If the types don't match, the method can be unusable
     from there.
 
@@ -1364,7 +1227,7 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   RPCs whose behavior does *not* depend on the current chainstate may omit this
   call.
 
-  - *Rationale*: In previous versions of Dash Core, the wallet was always
+  - *Rationale*: In previous versions of Gryphonmoon Core, the wallet was always
     in-sync with the chainstate (by virtue of them all being updated in the
     same cs_main lock). In order to maintain the behavior that wallet RPCs
     return results as of at least the highest best-known block an RPC
@@ -1383,7 +1246,7 @@ A few guidelines for introducing and reviewing new RPC interfaces:
     new RPC is replacing a deprecated RPC, to avoid both RPCs confusingly
     showing up in the command list.
 
-- Use *invalid* Dash addresses (e.g. in the constant array `EXAMPLE_ADDRESS`) for
+- Use *invalid* Gryphonmoon addresses (e.g. in the constant array `EXAMPLE_ADDRESS`) for
   `RPCExamples` help documentation.
 
   - *Rationale*: Prevent accidental transactions by users.
@@ -1392,12 +1255,6 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   timestamps in the documentation.
 
   - *Rationale*: User-facing consistency.
-
-- Use `fs::path::u8string()` and `fs::u8path()` functions when converting path
-  to JSON strings, not `fs::PathToString` and `fs::PathFromString`
-
-  - *Rationale*: JSON strings are Unicode strings, not byte strings, and
-    RFC8259 requires JSON to be encoded as UTF-8.
 
 Internal interface guidelines
 -----------------------------
@@ -1465,9 +1322,22 @@ communication:
   virtual boost::signals2::scoped_connection connectTipChanged(TipChangedFn fn) = 0;
   ```
 
-- Interface methods should not be overloaded.
+- For consistency and friendliness to code generation tools, interface method
+  input and inout parameters should be ordered first and output parameters
+  should come last.
 
-  *Rationale*: consistency and friendliness to code generation tools.
+  Example:
+
+  ```c++
+  // Good: error output param is last
+  virtual bool broadcastTransaction(const CTransactionRef& tx, CAmount max_fee, std::string& error) = 0;
+
+  // Bad: error output param is between input params
+  virtual bool broadcastTransaction(const CTransactionRef& tx, std::string& error, CAmount max_fee) = 0;
+  ```
+
+- For friendliness to code generation tools, interface methods should not be
+  overloaded:
 
   Example:
 
@@ -1481,12 +1351,9 @@ communication:
   virtual bool disconnect(NodeId id) = 0;
   ```
 
-### Internal interface naming style
-
-- Interface method names should be `lowerCamelCase` and standalone function names should be
+- For consistency and friendliness to code generation tools, interface method
+  names should be `lowerCamelCase` and standalone function names should be
   `UpperCamelCase`.
-
-  *Rationale*: consistency and friendliness to code generation tools.
 
   Examples:
 

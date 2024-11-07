@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2024 The Dash Core developers
+# Copyright (c) 2015-2023 The Dash Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,13 +12,13 @@ Checks intra quorum connections
 
 import time
 
-from test_framework.test_framework import DashTestFramework
+from test_framework.test_framework import GryphonmoonTestFramework
 from test_framework.util import assert_greater_than_or_equal
 
-class LLMQConnections(DashTestFramework):
+class LLMQConnections(GryphonmoonTestFramework):
     def set_test_params(self):
-        self.set_dash_test_params(15, 14)
-        self.set_dash_llmq_test_params(5, 3)
+        self.set_gryphonmoon_test_params(15, 14, fast_dip3_enforcement=True)
+        self.set_gryphonmoon_llmq_test_params(5, 3)
         # Probes should age after this many seconds.
         # NOTE: mine_quorum() can bump mocktime quite often internally so make sure this number is high enough.
         self.MAX_AGE = int(120 * self.options.timeout_factor)
@@ -44,7 +44,7 @@ class LLMQConnections(DashTestFramework):
         self.wait_for_sporks_same()
 
         self.log.info("mining one block and waiting for all members to connect to each other")
-        self.generate(self.nodes[0], 1, sync_fun=self.no_op)
+        self.nodes[0].generate(1)
         for mn in self.get_quorum_masternodes(q):
             self.wait_for_mnauth(mn.node, 4)
 
