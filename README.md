@@ -1,11 +1,7 @@
 Gryphon Moon Core staging tree
 ===========================
+https://www.gryphonmoon.com
 
-|CI|master|develop|
-|-|-|-|
-|Gitlab|[![Build Status](https://github.com/gogryphon/gryphoonmoon/badges/master/pipeline.svg)](https://github.com/gogryphon/gryphoonmoon/-/tree/master)|[![Build Status](https://github.com/gogryphon/gryphoonmoon/badges/develop/pipeline.svg)](https://github.com/gogryphon/gryphoonmoon/-/tree/develop)|
-
-https://www.gryphonmoonh.com
 
 License
 -------
