@@ -289,10 +289,10 @@ public:
         nMinSporkKeys = 1;
 
         std::vector<DevfeeRewardStructure> rewardStructures = {  {INT_MAX, 10}  }; // 10% dev fee
-        consensus.nDevfeePayment = DevfeePayment(rewardStructures, 1, "GRcCi5yxXWRhrBrZTWqnw1PJiP4o2Dcjxj");
+        consensus.nDevfeePayment = DevfeePayment(rewardStructures, 1541, "GUmRkSZZq8rnT2nqifQVsG5qTaWiHPxkmF");
 
         std::vector<DevfeeRewardStructure> rewardStructuresCommunity = {  {INT_MAX, 40} }; // 40% Community P2E   
-	    consensus.nCommunityPayment = DevfeePayment(rewardStructuresCommunity, 1, "GbdiGmvtX2vGXyougEcpTtwHm75vrQPU3q");
+	    consensus.nCommunityPayment = DevfeePayment(rewardStructuresCommunity, 1541, "GQiXBHEwPfvdbFkUvUmvkyqVSWYyGMBXzs");
 
 
         checkpointData = {
@@ -391,11 +391,11 @@ public:
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("0x00000c4028b61092d080a5d02bfc4200e38620e89282fe1225356e741bd1c31a"); // Genesis block
         
-        pchMessageStart[0] = 0x74; // t
-        pchMessageStart[1] = 0x4f; // O
-        pchMessageStart[2] = 0x53; // S
-        pchMessageStart[3] = 0x4d; // M
-        nDefaultPort = 111820;
+        pchMessageStart[0] = 0x74;
+        pchMessageStart[1] = 0x4f;
+        pchMessageStart[2] = 0x53;
+        pchMessageStart[3] = 0x4d; 
+        nDefaultPort = 41820;
         nDefaultPlatformP2PPort = 22000;
         nDefaultPlatformHTTPPort = 22001;
         nPruneAfterHeight = 1000;

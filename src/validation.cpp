@@ -1164,14 +1164,12 @@ static std::pair<CAmount, CAmount> GetBlockSubsidyHelper(int nPrevBits, int nPre
     const short owlings = 21262; // amount of blocks between 2 owlings
     int multiplier;              // integer number of owlings
     int tempHeight;              // number of blocks since last anchor
-    if (nPrevHeight < 5) {
-        nSubsidyBase = Params().NetworkIDString() == CBaseChainParams::TESTNET ? 20000 : 900000;
-    } else if (nPrevHeight < 10) {
-        nSubsidyBase = 800000;
-        
-    } else if (nPrevHeight < 20) {
-        nSubsidyBase = 700000;
-        
+    if (nPrevHeight < 100) {
+        nSubsidyBase = Params().NetworkIDString() == CBaseChainParams::TESTNET ? 20000 : 4;
+    } else if (nPrevHeight < 1540) {
+        nSubsidyBase = 5000;
+    } else if (nPrevHeight < 1540) {
+        nSubsidyBase = 10;
     } else if ((nPrevHeight > 553531) && (nPrevHeight < 2105657)) {
         tempHeight = nPrevHeight - 553532;
         multiplier = tempHeight / owlings;
