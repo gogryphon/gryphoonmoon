@@ -5100,11 +5100,11 @@
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
         "keySize" : 256,
-        "uncompressed" : "041f7f85caf2d7550e7af9b65023ebb4dce3450311692309db2611820b834b611c70827f45b78020ecbbaf484fdd5bfaae6870f1184c21581baf6ef82bd7b530f93",
-        "wx" : "1f7f85caf2d7550e7af9b65023ebb4dce3450311692309db2611820b834b611c7",
+        "uncompressed" : "041f7f85caf2d7550e7af9b65023ebb4dce3450311692309db269969b834b611c70827f45b78020ecbbaf484fdd5bfaae6870f1184c21581baf6ef82bd7b530f93",
+        "wx" : "1f7f85caf2d7550e7af9b65023ebb4dce3450311692309db269969b834b611c7",
         "wy" : "0827f45b78020ecbbaf484fdd5bfaae6870f1184c21581baf6ef82bd7b530f93"
       },
-      "publicKeyDer" : "3056301006072a8648ce3d020106052b8104000a034200041f7f85caf2d7550e7af9b65023ebb4dce3450311692309db2611820b834b611c70827f45b78020ecbbaf484fdd5bfaae6870f1184c21581baf6ef82bd7b530f93",
+      "publicKeyDer" : "3056301006072a8648ce3d020106052b8104000a034200041f7f85caf2d7550e7af9b65023ebb4dce3450311692309db269969b834b611c70827f45b78020ecbbaf484fdd5bfaae6870f1184c21581baf6ef82bd7b530f93",
       "publicKeyPem" : "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEH3+FyvLXVQ56+bZQI+u03ONFAxFpIwnb\nJplpuDS2EccIJ/RbeAIOy7r0hP3Vv6rmhw8RhMIVgbr274K9e1MPkw==\n-----END PUBLIC KEY-----\n",
       "sha" : "SHA-256",
       "tests" : [
