@@ -1168,7 +1168,7 @@ static std::pair<CAmount, CAmount> GetBlockSubsidyHelper(int nPrevBits, int nPre
         nSubsidyBase = Params().NetworkIDString() == CBaseChainParams::TESTNET ? 20000 : 4;
     } else if (nPrevHeight < 1540) {
         nSubsidyBase = 5000;
-    } else if (nPrevHeight < 1540) {
+    } else if (nPrevHeight < 1840) {
         nSubsidyBase = 10;
     } else if ((nPrevHeight > 553531) && (nPrevHeight < 2105657)) {
         tempHeight = nPrevHeight - 553532;
