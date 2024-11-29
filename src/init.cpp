@@ -802,7 +802,7 @@ void SetupServerArgs(NodeContext& node)
 
 std::string LicenseInfo()
 {
-    const std::string URL_SOURCE_CODE = "<https://github.com/gogryphon/gryphonmoon>";
+    const std::string URL_SOURCE_CODE = "<https://github.com/gogryphon/gryphoonmoon>";
 
     return CopyrightHolders(_("Copyright (C)").translated, 2014, COPYRIGHT_YEAR) + "\n" +
            "\n" +

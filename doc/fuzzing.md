@@ -5,12 +5,12 @@
 To quickly get started fuzzing Gryphonmoon Core using [libFuzzer](https://llvm.org/docs/LibFuzzer.html):
 
 ```sh
-$ git clone https://github.com/gogryphon/gryphonmoon
+$ git clone https://github.com/gogryphon/gryphoonmoon
 $ cd gryphonmoon/
 $ ./autogen.sh
 $ CC=clang CXX=clang++ ./configure --enable-fuzz --with-sanitizers=address,fuzzer,undefined
 # macOS users: If you have problem with this step then make sure to read "macOS hints for
-# libFuzzer" on https://github.com/gogryphon/gryphonmoon/blob/develop/doc/fuzzing.md#macos-hints-for-libfuzzer
+# libFuzzer" on https://github.com/gogryphon/gryphoonmoon/blob/develop/doc/fuzzing.md#macos-hints-for-libfuzzer
 $ make
 $ FUZZ=process_message src/test/fuzz/fuzz
 # abort fuzzing using ctrl-c
@@ -18,7 +18,7 @@ $ FUZZ=process_message src/test/fuzz/fuzz
 
 ## Fuzzing harnesses and output
 
-[`process_message`](https://github.com/gogryphon/gryphonmoon/blob/develop/src/test/fuzz/process_message.cpp) is a fuzzing harness for the [`ProcessMessage(...)` function (`net_processing`)](https://github.com/gogryphon/gryphonmoon/blob/develop/src/net_processing.cpp). The available fuzzing harnesses are found in [`src/test/fuzz/`](https://github.com/gogryphon/gryphonmoon/tree/develop/src/test/fuzz).
+[`process_message`](https://github.com/gogryphon/gryphoonmoon/blob/develop/src/test/fuzz/process_message.cpp) is a fuzzing harness for the [`ProcessMessage(...)` function (`net_processing`)](https://github.com/gogryphon/gryphoonmoon/blob/develop/src/net_processing.cpp). The available fuzzing harnesses are found in [`src/test/fuzz/`](https://github.com/gogryphon/gryphoonmoon/tree/develop/src/test/fuzz).
 
 The fuzzer will output `NEW` every time it has created a test input that covers new areas of the code under test. For more information on how to interpret the fuzzer output, see the [libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html).
 
@@ -113,7 +113,7 @@ example using `brew install llvm`.
 
 Should you run into problems with the address sanitizer, it is possible you
 may need to run `./configure` with `--disable-asm` to avoid errors
-with certain assembly code from Gryphonmoon Core's code. See [developer notes on sanitizers](https://github.com/gogryphon/gryphonmoon/blob/develop/doc/developer-notes.md#sanitizers)
+with certain assembly code from Gryphonmoon Core's code. See [developer notes on sanitizers](https://github.com/gogryphon/gryphoonmoon/blob/develop/doc/developer-notes.md#sanitizers)
 for more information.
 
 You may also need to take care of giving the correct path for `clang` and
@@ -135,7 +135,7 @@ Read the [libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html) for mor
 To quickly get started fuzzing Gryphonmoon Core using [afl++](https://github.com/AFLplusplus/AFLplusplus):
 
 ```sh
-$ git clone https://github.com/gogryphon/gryphonmoon
+$ git clone https://github.com/gogryphon/gryphoonmoon
 $ cd gryphonmoon/
 $ git clone https://github.com/AFLplusplus/AFLplusplus
 $ make -C AFLplusplus/ source-only
@@ -162,7 +162,7 @@ Read the [afl++ documentation](https://github.com/AFLplusplus/AFLplusplus) for m
 To quickly get started fuzzing Gryphonmoon Core using [Honggfuzz](https://github.com/google/honggfuzz):
 
 ```sh
-$ git clone https://github.com/gogryphon/gryphonmoon
+$ git clone https://github.com/gogryphon/gryphoonmoon
 $ cd gryphonmoon/
 $ ./autogen.sh
 $ git clone https://github.com/google/honggfuzz
@@ -191,7 +191,7 @@ To quickly get started fuzzing the P2P layer using Honggfuzz NetDriver:
 ```sh
 $ mkdir bitcoin-honggfuzz-p2p/
 $ cd bitcoin-honggfuzz-p2p/
-$ git clone https://github.com/gogryphon/gryphonmoon/
+$ git clone https://github.com/gogryphon/gryphoonmoon/
 $ cd gryphonmoon/
 $ ./autogen.sh
 $ git clone https://github.com/google/honggfuzz

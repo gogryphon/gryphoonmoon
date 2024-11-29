@@ -67,7 +67,7 @@ brew install berkeley-db4
 
 1. Clone the Gryphonmoon Core source code:
     ```shell
-    git clone https://github.com/gogryphon/gryphonmoon
+    git clone https://github.com/gogryphon/gryphoonmoon
     cd gryphonmoon
     ```
 

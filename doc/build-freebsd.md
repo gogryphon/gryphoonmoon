@@ -59,7 +59,7 @@ pkg install gmp
 ```
 
 #### Wallet Dependencies
-It is not necessary to build wallet functionality to run gryphonmoond or the GUI. To enable legacy wallets, you must install `db5`. To enable [descriptor wallets](https://github.com/gogryphon/gryphonmoon/blob/master/doc/descriptors.md), `sqlite3` is required. Skip `db5` if you intend to *exclusively* use descriptor wallets
+It is not necessary to build wallet functionality to run gryphonmoond or the GUI. To enable legacy wallets, you must install `db5`. To enable [descriptor wallets](https://github.com/gogryphon/gryphoonmoon/blob/master/doc/descriptors.md), `sqlite3` is required. Skip `db5` if you intend to *exclusively* use descriptor wallets
 
 ###### Legacy Wallet Support
 `db5` is required to enable support for legacy wallets. Skip if you don't intend to use legacy wallets
