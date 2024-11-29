@@ -18,7 +18,7 @@ pkg_add python # (select highest version, e.g. 3.8)
 pkg_add gmp
 pkg_add boost
 
-git clone https://github.com/gogryphon/gryphonmoon.git
+git clone https://github.com/gogryphon/gryphoonmoon.git
 ```
 
 See [dependencies.md](dependencies.md) for a complete overview.

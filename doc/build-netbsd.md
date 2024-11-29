@@ -25,7 +25,7 @@ libtool
 pkg-config
 python37
 
-git clone https://github.com/gogryphon/gryphonmoon.git
+git clone https://github.com/gogryphon/gryphoonmoon.git
 ```
 
 See [dependencies.md](dependencies.md) for a complete overview.
