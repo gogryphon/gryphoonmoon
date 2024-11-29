@@ -2,11 +2,20 @@ Gryphon Moon Core staging tree
 ===========================
 https://www.gryphonmoon.com
 
+What is Gryphon Moon?
+--------------------
+
+Gryphon Moon is more than just a blockchain project—it’s a foundation for the next generation of P2E gaming. By using GRYPM, our native cryptocurrency, games can integrate blockchain features effortlessly, offering better player experiences and more engaging mechanics. 
+
+Our vision extends far beyond gaming. With a focus on decentralization and security, Gryphon Moon is built to support developers, creators, and innovators who want to explore new possibilities in Web3 technology. 
+
+Our blockchain technology is designed to be resistant to ASIC and FPGA mining, ensuring a decentralized network powered by secure and efficient CPU mining.
+With robust protection against 51% attacks and the integration of masternodes, our system offers enhanced stability, faster transaction processing, and a strong foundation for decentralized governance.
 
 License
 -------
 
-Dash Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
+Gryphon Moon Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
 information or see https://opensource.org/licenses/MIT.
 
 Development Process
