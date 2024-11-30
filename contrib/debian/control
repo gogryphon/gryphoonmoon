@@ -23,7 +23,7 @@ Build-Depends: debhelper,
 Standards-Version: 3.9.2
 Homepage: https://www.gryphonmoon.com/
 Vcs-Git: git://github.com/gogryphon/gryphonmoon.git
-Vcs-Browser: https://github.com/gogryphon/gryphonmoon
+Vcs-Browser: https://github.com/gogryphon/gryphoonmoon
 
 Package: gryphonmoond
 Architecture: any

@@ -52,7 +52,7 @@ RUN for i in $(seq -w 1 ${builder_count}); do    \
 
 ENTRYPOINT ["/root/.config/guix/current/bin/guix-daemon","--build-users-group=guixbuild"]
 
-RUN git clone https://github.com/gogryphon/gryphonmoon.git /gryphonmoon
+RUN git clone https://github.com/gogryphon/gryphoonmoon.git /gryphonmoon
 
 RUN mkdir base_cache sources SDKs
 

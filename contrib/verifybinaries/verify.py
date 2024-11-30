@@ -21,7 +21,7 @@ from textwrap import indent
 
 WORKINGDIR = "/tmp/gryphonmoon_verify_binaries"
 HASHFILE = "hashes.tmp"
-HOST1="https://github.com/gogryphon/gryphonmoon/releases/download/v"
+HOST1="https://github.com/gogryphon/gryphoonmoon/releases/download/v"
 HOST2="https://gryphonmooncore-binaries.thepasta.org/file/gryphonmooncore-binaries/"
 VERSIONPREFIX=""
 SIGNATUREFILENAME = "SHA256SUMS.asc"
